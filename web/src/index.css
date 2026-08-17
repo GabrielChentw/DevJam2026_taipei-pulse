@@ -1156,31 +1156,6 @@ body {
   height: 100%;
 }
 
-.map-night-overlay {
-  position: absolute;
-  z-index: 2;
-  inset: 0;
-  background:
-    radial-gradient(circle at 62% 20%, rgba(71, 98, 135, 0.05), rgba(4, 10, 22, 0.3) 62%),
-    rgba(5, 12, 25, 0.18);
-  mix-blend-mode: multiply;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 280ms ease;
-}
-
-.map-root.is-night .map-night-overlay {
-  opacity: 1;
-}
-
-.map-root.is-night .map-canvas {
-  filter: brightness(0.62) saturate(0.76) contrast(1.08) hue-rotate(4deg);
-}
-
-.map-canvas {
-  transition: filter 280ms ease;
-}
-
 .map-overlay {
   position: absolute;
   inset: 0;
@@ -1340,18 +1315,6 @@ body {
 .camera-bar button.is-active {
   border-color: #4493f8;
   color: #4493f8;
-}
-
-.camera-bar button.map-theme-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-}
-
-.camera-bar button.map-theme-btn.is-active {
-  border-color: #8da9d8;
-  color: #c9daf5;
-  background: rgba(91, 118, 164, 0.15);
 }
 
 .camera-bar button.back-btn {

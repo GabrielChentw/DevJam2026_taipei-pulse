@@ -38,12 +38,11 @@ interface Map3DProps {
   /** 地圖與 maps3d 函式庫就緒時呼叫，父層可藉此加圖層或控制相機。 */
   onReady?: (map: Map3DElementLike, lib: Maps3dLibrary) => void;
   onStatusChange?: (status: MapStatus) => void;
-  nightMode?: boolean;
 }
 
 const OPENING_PRESET = CAMERA_PRESETS.find((p) => p.id === 'cityHall')!;
 
-export function Map3D({ onReady, onStatusChange, nightMode = false }: Map3DProps) {
+export function Map3D({ onReady, onStatusChange }: Map3DProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<MapStatus>({ kind: 'loading' });
   /** 圖磚是否已全部載完（gmp-steadystate）。只用於顯示提示，不影響可見性。 */
@@ -148,9 +147,8 @@ export function Map3D({ onReady, onStatusChange, nightMode = false }: Map3DProps
   }, []);
 
   return (
-    <div className={`map-root${nightMode ? ' is-night' : ''}`}>
+    <div className="map-root">
       <div ref={containerRef} className="map-canvas" aria-label="台北 3D 地圖" role="application" />
-      <div className="map-night-overlay" aria-hidden="true" />
 
       {/* 圖磚串流中的提示。刻意做成不遮擋的小角標，讓使用者看得到地圖逐漸長出來。 */}
       {status.kind === 'ready' && !settled && (
