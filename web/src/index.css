@@ -1,86 +1,438 @@
+/* ── 字型 ─────────────────────────────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&display=swap');
+
+/* ── 色彩 token：米白 × 森綠（亮色預設） ─────────────────────────────────── */
 :root {
-  --bg: #0d1117;
-  --panel: #161b22;
-  --border: #30363d;
-  --text: #e6edf3;
-  --muted: #9198a1;
-  --accent: #4493f8;
-  --danger: #f85149;
-  --ok: #3fb950;
+  --bg-base:          #F5F5F0;
+  --bg-card:          #FFFFFF;
+  --bg-panel:         #FAFAF8;
+  --bg-input:         #F0F1EC;
+  --green:            #3A6B4F;
+  --green-light:      #EBF2ED;
+  --border:           #E2E4DC;
+  --border-focus:     #3A6B4F;
+  --text-primary:     #1A2417;
+  --text-secondary:   #4A5C45;
+  --text-muted:       #8A9A85;
+  --bubble-user:      #3A6B4F;
+  --bubble-user-text: #FFFFFF;
+  --bubble-agent:     #FFFFFF;
+  --bubble-agent-text:#1A2417;
+  --shadow-xs:        0 1px 3px rgba(26,36,23,0.07);
+  --shadow-sm:        0 2px 8px rgba(26,36,23,0.09);
+  --shadow-md:        0 4px 16px rgba(26,36,23,0.10);
 
-  color-scheme: dark;
-  font-family: 'Noto Sans TC', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  /* 地圖 overlay（暗色，因為疊在 3D 地圖上）*/
+  --map-overlay-bg:   rgba(10,18,10,0.80);
+  --map-card-bg:      rgba(15,24,15,0.92);
+  --map-text:         #E8F0E5;
+  --map-muted:        #8AA890;
+  --map-border:       rgba(255,255,255,0.12);
 }
 
-* {
-  box-sizing: border-box;
+[data-theme='dark'] {
+  --bg-base:          #0F1610;
+  --bg-card:          #1A2417;
+  --bg-panel:         #141E11;
+  --bg-input:         #1E2B1A;
+  --border:           #2A3A26;
+  --border-focus:     #5A9B72;
+  --text-primary:     #E8EDE5;
+  --text-secondary:   #A8C0A0;
+  --text-muted:       #6B8065;
+  --bubble-user:      #2D5840;
+  --bubble-user-text: #E8EDE5;
+  --bubble-agent:     #1A2417;
+  --bubble-agent-text:#E8EDE5;
+  --bg-panel:         #141E11;
+  --shadow-xs:        0 1px 3px rgba(0,0,0,0.25);
+  --shadow-sm:        0 2px 8px rgba(0,0,0,0.30);
 }
 
-html,
-body,
-#root {
+/* ── 視障模式：高對比覆寫 ─────────────────────────────────────────────────── */
+[data-access='visual'] {
+  --bubble-agent:     #FFFFFF;
+  --bubble-agent-text:#000000;
+  --bubble-user:      #003080;
+  --bubble-user-text: #FFFFFF;
+  --bg-base:          #EFEFEF;
+}
+
+/* ── Reset ────────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body, #root {
   height: 100%;
   margin: 0;
+  font-family: -apple-system, 'Hiragino Kaku Gothic ProN', 'Noto Sans TC', 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
 body {
-  background: var(--bg);
-  color: var(--text);
+  background: var(--bg-base);
+  color: var(--text-primary);
 }
 
-.app {
-  display: grid;
-  grid-template-rows: auto 1fr auto;
-  height: 100%;
+/* AI Logo 原圖含完整文字與白邊；頁首只裁出識別圖形，旁邊保留可讀品牌字。 */
+.header-logo-mark {
+  position: relative;
+  width: 50px;
+  height: 50px;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-radius: 10px;
+  background: #fff;
 }
 
-.app-header {
+.header-logo-mark img {
+  position: absolute;
+  top: -3px;
+  left: -19px;
+  width: 84px;
+  max-width: none;
+  height: auto;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* ── 通用動畫 ─────────────────────────────────────────────────────────────── */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+
+@keyframes blink {
+  0%, 80%, 100% { opacity: 0.2; transform: scale(0.8); }
+  40%           { opacity: 1;   transform: scale(1.0); }
+}
+
+.fade-up   { animation: fadeUp  0.22s ease both; }
+.slide-up  { animation: slideUp 0.28s cubic-bezier(0.32, 0.72, 0, 1) both; }
+
+.typing-dot { animation: blink 1.2s ease-in-out infinite; }
+
+@keyframes mic-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); }
+  50%       { box-shadow: 0 0 0 6px rgba(34, 197, 94, 0); }
+}
+
+/* ── 捲軸美化 ─────────────────────────────────────────────────────────────── */
+::-webkit-scrollbar       { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+
+/* 右側路線必須自己形成獨立捲動區，不能依賴頁面 body 捲動。 */
+.route-panel-scroll {
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  scrollbar-gutter: stable;
+  -webkit-overflow-scrolling: touch;
+}
+
+/*
+ * 這個容器是直向 flex；預設 flex-shrink: 1 會把每張路線卡硬壓進
+ * 一個螢幕高度，造成卡片看起來像被裁切，而且根本沒有溢出量可捲動。
+ */
+.route-panel-scroll > * {
+  flex-shrink: 0;
+}
+
+.route-panel-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+.route-panel-scroll::-webkit-scrollbar-thumb {
+  min-height: 48px;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: var(--text-muted);
+  background-clip: padding-box;
+}
+
+.route-panel-scroll:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: -2px;
+}
+
+/* ── 起點／終點卡 ────────────────────────────────────────────────────────── */
+.journey-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1.5px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg-card);
+  box-shadow: var(--shadow-xs);
+}
+
+.journey-card-icon {
+  display: flex;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  background: var(--green-light);
+  color: var(--green);
+}
+
+.journey-endpoint {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.journey-endpoint small {
+  color: var(--text-muted);
+  font-size: 10.5px;
+}
+
+.journey-endpoint strong {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.journey-arrow {
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+/* ── 路線比較：先同時看摘要，再切換下方完整行程 ─────────────────────────── */
+.route-section-heading {
   display: flex;
   align-items: baseline;
-  gap: 0.75rem;
-  padding: 0.75rem 1.25rem;
-  background: var(--panel);
-  border-bottom: 1px solid var(--border);
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 700;
 }
 
-.app-header h1 {
-  margin: 0;
-  font-size: 1.15rem;
-  letter-spacing: 0.02em;
+.route-section-heading small {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 400;
 }
 
-.app-tagline {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.85rem;
+.route-comparison {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
-.status-pill {
-  margin-left: auto;
-  padding: 0.2rem 0.6rem;
+.route-option-group {
+  min-width: 0;
+}
+
+.route-option-group.is-expanded .route-summary-card {
+  border-radius: 14px 14px 0 0;
+}
+
+.route-expanded-detail {
+  animation: fadeUp 0.18s ease both;
+}
+
+.route-detail-card.is-embedded {
+  border-top: 0 !important;
+  border-radius: 0 0 14px 14px !important;
+  box-shadow: var(--shadow-xs) !important;
+}
+
+.route-summary-card {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  overflow: hidden;
+  border: 1.5px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg-card);
+  box-shadow: var(--shadow-xs);
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+}
+
+.route-summary-card.is-selected {
+  border-color: var(--green);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--green) 12%, transparent);
+}
+
+.route-summary-select {
+  display: grid;
+  flex: 1;
+  grid-template-columns: minmax(165px, 0.65fr) minmax(210px, 1.35fr) auto;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+}
+
+.route-summary-select:hover {
+  background: color-mix(in srgb, var(--green-light) 45%, transparent);
+}
+
+.route-summary-select:focus-visible,
+.route-summary-map:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: -2px;
+}
+
+.route-summary-topline,
+.route-summary-meta,
+.route-mode-chain {
+  display: flex;
+  align-items: center;
+}
+
+.route-summary-topline {
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.route-summary-primary,
+.route-summary-middle {
+  display: block;
+  min-width: 0;
+}
+
+.route-summary-name {
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 750;
+}
+
+.route-code-badge {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.route-best-badge {
+  padding: 2px 7px;
   border-radius: 999px;
-  font-size: 0.75rem;
-  border: 1px solid var(--border);
+  background: var(--green-light);
+  color: var(--green);
+  font-size: 10px;
+  font-weight: 700;
 }
 
-.status-loading {
-  color: var(--muted);
+.route-summary-time {
+  display: block;
+  margin-top: 7px;
+  color: var(--text-muted);
+  font-size: 11px;
 }
 
-.status-ready {
-  color: var(--ok);
-  border-color: color-mix(in srgb, var(--ok) 40%, transparent);
+.route-summary-time strong {
+  color: var(--green);
+  font-size: 22px;
+  line-height: 1;
 }
 
-.status-error {
-  color: var(--danger);
-  border-color: color-mix(in srgb, var(--danger) 40%, transparent);
+.route-mode-chain {
+  flex-wrap: wrap;
+  gap: 5px;
+  color: var(--text-secondary);
+  font-size: 11.5px;
+  font-weight: 600;
 }
 
-.app-body {
-  position: relative;
-  min-height: 0;
+.route-mode-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
+
+.route-mode-arrow {
+  margin-left: 2px;
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.route-summary-meta {
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 7px;
+}
+
+.route-summary-meta > span {
+  padding: 3px 7px;
+  border-radius: 6px;
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  font-size: 10.5px;
+}
+
+.route-summary-cue {
+  display: inline-flex;
+  justify-content: flex-end;
+  white-space: nowrap;
+  color: var(--green);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.route-summary-map {
+  display: flex;
+  width: 92px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 8px 12px;
+  border: 0;
+  border-left: 1px solid var(--border);
+  background: var(--green-light);
+  color: var(--green);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.route-summary-map:hover {
+  background: var(--green);
+  color: #fff;
+}
+
+@media (max-width: 900px) {
+  .route-summary-select {
+    grid-template-columns: minmax(105px, 0.7fr) minmax(160px, 1.3fr);
+    gap: 10px;
+  }
+
+  .route-summary-cue {
+    display: none;
+  }
+
+  .route-section-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   以下為同學的 Map3D 元件使用的 CSS，請勿刪除
+   ══════════════════════════════════════════════════════════════════════════════ */
 
 .map-root {
   position: relative;
@@ -97,39 +449,35 @@ body {
   display: grid;
   place-items: center;
   padding: 2rem;
-  background: var(--bg);
+  background: var(--bg-base);
 }
 
-/*
- * 圖磚串流中的角標。刻意不遮擋地圖 —— Photorealistic 3D 圖磚要花數秒到數十秒
- * 才會全部載完，期間地圖是可用的，用全屏遮罩蓋住只會讓人以為壞了。
- */
 .map-tiles-badge {
   position: absolute;
   top: 0.75rem;
   left: 0.75rem;
   padding: 0.3rem 0.7rem;
-  border: 1px solid var(--border);
+  border: 1px solid var(--map-border);
   border-radius: 999px;
-  background: rgb(13 17 23 / 78%);
+  background: rgba(10,18,10,0.78);
   backdrop-filter: blur(4px);
   font-size: 0.75rem;
-  color: var(--muted);
+  color: var(--map-muted);
   pointer-events: none;
 }
 
 .map-error {
   max-width: 42rem;
-  border: 1px solid color-mix(in srgb, var(--danger) 40%, transparent);
+  border: 1px solid rgba(248,81,73,0.4);
   border-radius: 8px;
   padding: 1.25rem 1.5rem;
-  background: color-mix(in srgb, var(--danger) 8%, var(--panel));
+  background: rgba(248,81,73,0.08);
 }
 
 .map-error h2 {
   margin: 0 0 0.5rem;
   font-size: 1rem;
-  color: var(--danger);
+  color: #f85149;
 }
 
 .map-error p {
@@ -138,22 +486,17 @@ body {
   font-size: 0.9rem;
 }
 
-.map-error-hint {
-  color: var(--muted);
-}
-
-.map-error-code {
-  font-size: 0.85rem;
-}
+.map-error-hint  { color: #9198a1; }
+.map-error-code  { font-size: 0.85rem; }
 
 .map-error-raw {
   max-height: 12rem;
   overflow: auto;
   margin: 0.75rem 0;
   padding: 0.75rem;
-  border: 1px solid var(--border);
+  border: 1px solid #30363d;
   border-radius: 6px;
-  background: rgb(0 0 0 / 35%);
+  background: rgba(0,0,0,0.35);
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -161,7 +504,7 @@ body {
 .map-error-raw code {
   background: none;
   padding: 0;
-  color: var(--text);
+  color: #e6edf3;
   font-size: 0.78rem;
   line-height: 1.5;
 }
@@ -169,10 +512,60 @@ body {
 .map-error code {
   padding: 0.1rem 0.35rem;
   border-radius: 4px;
-  background: rgb(255 255 255 / 8%);
-  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  background: rgba(255,255,255,0.08);
+  font-family: ui-monospace, Consolas, monospace;
   font-size: 0.9em;
-  color: var(--accent);
+  color: #4493f8;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   同學的 App layout（地圖頁面用，請勿刪除）
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+.app {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  height: 100%;
+  background: #0d1117;
+  color: #e6edf3;
+}
+
+.app-header {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  padding: 0.75rem 1.25rem;
+  background: #161b22;
+  border-bottom: 1px solid #30363d;
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 1.15rem;
+  letter-spacing: 0.02em;
+}
+
+.app-tagline {
+  margin: 0;
+  color: #9198a1;
+  font-size: 0.85rem;
+}
+
+.status-pill {
+  margin-left: auto;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  border: 1px solid currentColor;
+}
+
+.status-loading { color: #9198a1; }
+.status-ready   { color: #3fb950; }
+.status-error   { color: #f85149; }
+
+.app-body {
+  position: relative;
+  min-height: 0;
 }
 
 .camera-bar {
@@ -180,36 +573,44 @@ body {
   flex-wrap: wrap;
   gap: 0.5rem;
   padding: 0.75rem 1.25rem;
-  background: var(--panel);
-  border-top: 1px solid var(--border);
+  background: #161b22;
+  border-top: 1px solid #30363d;
 }
 
 .camera-bar button {
   padding: 0.45rem 0.9rem;
   border-radius: 6px;
-  border: 1px solid var(--border);
+  border: 1px solid #30363d;
   background: transparent;
-  color: var(--text);
-  font: inherit;
+  color: #e6edf3;
   font-size: 0.85rem;
   cursor: pointer;
+  font-family: inherit;
+  transition: border-color 0.15s, color 0.15s;
 }
 
 .camera-bar button:hover:not(:disabled) {
-  border-color: var(--accent);
-}
-
-.camera-bar button:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-.camera-bar button.is-active {
-  border-color: var(--accent);
-  color: var(--accent);
+  border-color: #4493f8;
+  color: #4493f8;
 }
 
 .camera-bar button:disabled {
   opacity: 0.45;
-  cursor: not-allowed;
+  cursor: default;
+}
+
+.camera-bar button.is-active {
+  border-color: #4493f8;
+  color: #4493f8;
+}
+
+.camera-bar button.back-btn {
+  margin-left: auto;
+  border-color: #30363d;
+  color: #9198a1;
+}
+
+.camera-bar button.back-btn:hover {
+  border-color: #e6edf3;
+  color: #e6edf3;
 }
