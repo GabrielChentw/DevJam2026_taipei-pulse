@@ -13,7 +13,15 @@ import {
   type TrafficSceneTarget,
 } from './lib/api'
 import type { Map3DElementLike, Maps3dLibrary, Model3DElementLike } from './lib/googleMaps'
-import { createTrafficLayer, type TrafficLayerHandle } from './lib/trafficLayer'
+import {
+  createTrafficLabelMarker,
+  createTrafficLayer,
+  updateTrafficLabelMarker,
+  vehicleAltitude,
+  vehicleLabelAltitude,
+  vehicleModelScale,
+  type TrafficLayerHandle,
+} from './lib/trafficLayer'
 import {
   buildFirstNavigationCue,
   buildRouteTourTimeline,
@@ -170,6 +178,7 @@ export default function App() {
   const selectedRouteRef = useRef<PlannedRoute | null>(null)
   const routeLinesRef = useRef<HTMLElement[]>([])
   const transitMarkerRef = useRef<Model3DElementLike | null>(null)
+  const transitLabelRef = useRef<Model3DElementLike | null>(null)
   const transitSnapshotRef = useRef<TransitArrivalSnapshot | null>(null)
   const trafficLayerRef = useRef<TrafficLayerHandle | null>(null)
   const accessibilityMarkersRef = useRef<Record<AccessibilityFacility['kind'], HTMLElement[]>>({
@@ -330,7 +339,8 @@ export default function App() {
     setTourStatus('idle')
     const arrival = transitSnapshotRef.current?.arrivals[0]
     if (arrival && transitMarkerRef.current) {
-      transitMarkerRef.current.position = { ...arrival.position, altitude: 4 }
+      transitMarkerRef.current.position = { ...arrival.position, altitude: 2 }
+      if (transitLabelRef.current) transitLabelRef.current.position = { ...arrival.position, altitude: 11 }
     }
   }, [cancelTourTimers])
 
@@ -356,7 +366,8 @@ export default function App() {
     setTourStatus('returning')
     const arrival = transitSnapshotRef.current?.arrivals[0]
     if (arrival && transitMarkerRef.current) {
-      transitMarkerRef.current.position = { ...arrival.position, altitude: 4 }
+      transitMarkerRef.current.position = { ...arrival.position, altitude: 2 }
+      if (transitLabelRef.current) transitLabelRef.current.position = { ...arrival.position, altitude: 11 }
     }
     map.flyCameraTo({
       endCamera: {
@@ -403,8 +414,9 @@ export default function App() {
     if (frame.mode === 'bus' && transitMarkerRef.current) {
       // The selected suitable bus moves along the official TDX shape during
       // route preview, then returns to its latest arrival position afterwards.
-      transitMarkerRef.current.position = { ...frame.position, altitude: 4 }
+      transitMarkerRef.current.position = { ...frame.position, altitude: 2 }
       transitMarkerRef.current.orientation = { heading: frame.heading, tilt: 0, roll: 0 }
+      if (transitLabelRef.current) transitLabelRef.current.position = { ...frame.position, altitude: 11 }
     }
 
     if (now - tourLastUiUpdateRef.current > 180 || frame.finished) {
@@ -516,8 +528,12 @@ export default function App() {
     if (transitMarkerRef.current) {
       const latestArrival = transitSnapshotRef.current?.arrivals[0]
       transitMarkerRef.current.position = frame.mode === 'bus'
-        ? { ...frame.position, altitude: 4 }
-        : { ...(latestArrival?.position ?? frame.position), altitude: 4 }
+        ? { ...frame.position, altitude: 2 }
+        : { ...(latestArrival?.position ?? frame.position), altitude: 2 }
+      if (transitLabelRef.current) {
+        const labelPosition = frame.mode === 'bus' ? frame.position : latestArrival?.position ?? frame.position
+        transitLabelRef.current.position = { ...labelPosition, altitude: 11 }
+      }
       if (frame.mode === 'bus') {
         transitMarkerRef.current.orientation = { heading: frame.heading, tilt: 0, roll: 0 }
       }
@@ -754,6 +770,8 @@ export default function App() {
 
     transitMarkerRef.current?.remove()
     transitMarkerRef.current = null
+    transitLabelRef.current?.remove()
+    transitLabelRef.current = null
     transitSnapshotRef.current = null
     setTransitSnapshot(null)
     setTransitError(null)
@@ -800,16 +818,17 @@ export default function App() {
     const arrival = snapshot?.arrivals.find(item => item.suitable_for_wheelchair)
       ?? snapshot?.arrivals[0]
     if (!map || !lib || !snapshot || !arrival) return
+    const target = trafficScene?.vehicles.find(vehicle => vehicle.mode === 'bus' && vehicle.is_target)
 
     if (!transitMarkerRef.current) {
       const { Model3DInteractiveElement, Model3DElement, AltitudeMode } = lib
       const Model = Model3DInteractiveElement ?? Model3DElement
       transitMarkerRef.current = new Model({
-        position: { ...arrival.position, altitude: 4 },
-        orientation: { heading: 0, tilt: 0, roll: 0 },
-        scale: { x: 10.5, y: 9.75, z: 42 },
+        position: { ...arrival.position, altitude: target ? vehicleAltitude(target) : 4 },
+        orientation: { heading: target?.bearing ?? 0, tilt: 0, roll: 0 },
+        scale: target ? vehicleModelScale(target) : { x: 12.2, y: 3.85, z: 19.7 },
         src: '/models/vehicle-target.glb',
-        altitudeMode: AltitudeMode?.RELATIVE_TO_GROUND ?? 'RELATIVE_TO_GROUND',
+        altitudeMode: AltitudeMode?.RELATIVE_TO_MESH ?? AltitudeMode?.RELATIVE_TO_GROUND ?? 'RELATIVE_TO_GROUND',
       })
       const selectTargetBus = () => {
         const target = trafficScene?.vehicles.find(vehicle => vehicle.mode === 'bus' && vehicle.is_target)
@@ -819,7 +838,22 @@ export default function App() {
       transitMarkerRef.current.addEventListener('click', selectTargetBus)
       map.append(transitMarkerRef.current)
     } else {
-      transitMarkerRef.current.position = { ...arrival.position, altitude: 4 }
+      transitMarkerRef.current.position = { ...arrival.position, altitude: target ? vehicleAltitude(target) : 4 }
+      if (target) {
+        transitMarkerRef.current.scale = vehicleModelScale(target)
+        transitMarkerRef.current.orientation = { heading: target.bearing, tilt: 0, roll: 0 }
+      }
+    }
+
+    if (target && !transitLabelRef.current) {
+      transitLabelRef.current = createTrafficLabelMarker(lib, target)
+      const selectTargetBus = () => setSelectedTrafficVehicle(target)
+      transitLabelRef.current.addEventListener('gmp-click', selectTargetBus)
+      transitLabelRef.current.addEventListener('click', selectTargetBus)
+      map.append(transitLabelRef.current)
+    } else if (target && transitLabelRef.current) {
+      updateTrafficLabelMarker(transitLabelRef.current, target)
+      transitLabelRef.current.position = { ...arrival.position, altitude: vehicleLabelAltitude(target) }
     }
   }, [mapStatus.kind, trafficScene, transitSnapshot])
 
