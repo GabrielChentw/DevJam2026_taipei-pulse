@@ -14,7 +14,7 @@ from typing import Any
 from ..data_sources.tdx_bus import TDXBusShapeGeometry
 from ..models import AnnotatedLeg, Confidence, Feature, GeometryPrecision, LatLngPoint
 from .accessibility_facilities import AccessibilityFacilityIndex, load_accessibility_index
-from .routes_geometry import WalkingRouteGeometry
+from .routes_geometry import DrivingRouteGeometry, WalkingRouteGeometry
 
 # 車站設施中，會被複製到路段特徵上的欄位。
 _STATION_FEATURE_KEYS = (
@@ -66,12 +66,16 @@ class Annotator:
         self,
         corridor: dict[str, Any],
         walking_geometry: WalkingRouteGeometry | None = None,
+        bus_geometry: TDXBusShapeGeometry | None = None,
+        driving_geometry: DrivingRouteGeometry | None = None,
         accessibility_index: AccessibilityFacilityIndex | None = None,
     ) -> None:
         self._stations = {s["id"]: s for s in corridor.get("stations", [])}
         self._bus_routes = {r["id"]: r for r in corridor.get("bus_routes", [])}
         self._landmarks = corridor.get("landmarks", {})
         self._walking_geometry = walking_geometry or WalkingRouteGeometry()
+        self._bus_geometry = bus_geometry or TDXBusShapeGeometry()
+        self._driving_geometry = driving_geometry or DrivingRouteGeometry()
         self._accessibility_index = accessibility_index or load_accessibility_index()
 
     # ---------- 幾何 ----------

@@ -25,7 +25,8 @@ import {
 } from './lib/routeTour'
 import type { AccessibilityMode, AppPhase, Message, PlannedRoute } from './types'
 import type { AgentResponse } from './mockData'
-import { getSpeechRate, setSpeechRate as persistSpeechRate, SPEECH_RATES, stopSpeaking } from './lib/speech'
+import type { TrafficSceneSnapshot, TrafficVehicle, TransitArrivalSnapshot } from './types/api'
+import { getSpeechRate, setSpeechRate as persistSpeechRate, SPEECH_RATES, speak, stopSpeaking } from './lib/speech'
 import {
   audibleSignalsNearRoute,
   curbRampsNearRoute,
@@ -168,6 +169,9 @@ export default function App() {
   const mapsLibRef = useRef<Maps3dLibrary | null>(null)
   const selectedRouteRef = useRef<PlannedRoute | null>(null)
   const routeLinesRef = useRef<HTMLElement[]>([])
+  const transitMarkerRef = useRef<Model3DElementLike | null>(null)
+  const transitSnapshotRef = useRef<TransitArrivalSnapshot | null>(null)
+  const trafficLayerRef = useRef<TrafficLayerHandle | null>(null)
   const accessibilityMarkersRef = useRef<Record<AccessibilityFacility['kind'], HTMLElement[]>>({
     metro_exit: [],
     metro_access: [],
@@ -188,14 +192,61 @@ export default function App() {
   const tourLastUiUpdateRef = useRef(0)
   const tourPositionRef = useRef<{ lat: number; lng: number } | null>(null)
   const tourCurrentModeRef = useRef<TourMode>('walk')
-  const [tourStatus, setTourStatus] = useState<'idle' | 'running' | 'paused' | 'completed'>('idle')
+  const [tourStatus, setTourStatus] = useState<'idle' | 'running' | 'paused' | 'returning' | 'navigation-ready'>('idle')
   const [tourProgress, setTourProgress] = useState(0)
   const [tourMode, setTourMode] = useState<TourMode>('walk')
   const [tourStepIndex, setTourStepIndex] = useState(0)
   const [tourSpeed, setTourSpeed] = useState(1)
+  const [navigationCue, setNavigationCue] = useState<FirstNavigationCue | null>(null)
+  const [transitSnapshot, setTransitSnapshot] = useState<TransitArrivalSnapshot | null>(null)
+  const [transitLoading, setTransitLoading] = useState(false)
+  const [transitError, setTransitError] = useState<string | null>(null)
+  const [trafficScene, setTrafficScene] = useState<TrafficSceneSnapshot | null>(null)
+  const [trafficSceneError, setTrafficSceneError] = useState<string | null>(null)
+  const [selectedTrafficVehicle, setSelectedTrafficVehicle] = useState<TrafficVehicle | null>(null)
+  const [trafficLayerVisible, setTrafficLayerVisible] = useState(true)
+  const [activePreset, setActivePreset] = useState<string>('cityHall')
+  const anonymousUserIdRef = useRef(getAnonymousUserId())
+  const [profileDetail, setProfileDetail] = useState('')
+  const [preferenceStatus, setPreferenceStatus] = useState<'idle' | 'saving' | 'saved' | 'memory' | 'error'>('idle')
   const [selectedFacility, setSelectedFacility] = useState<AccessibilityFacility | null>(null)
   const [facilityPopoverPosition, setFacilityPopoverPosition] = useState<{ left: number; top: number; width: number } | null>(null)
   const [visibleFacilityLayers, setVisibleFacilityLayers] = useState({ metro_exit: true, metro_access: false, curb_ramp: false, public_toilet: false, audible_signal: false })
+
+  useEffect(() => {
+    if (window.localStorage.getItem('taipei-pulse-remember-preferences') !== 'true') return
+    let disposed = false
+    fetchUserPreferences(anonymousUserIdRef.current)
+      .then(snapshot => {
+        if (disposed || !snapshot.updated_at) return
+        setMode(snapshot.accessibility_mode)
+        setProfileDetail(snapshot.profile_detail)
+        setSpeechRate(snapshot.speech_rate)
+        persistSpeechRate(snapshot.speech_rate)
+        setDark(snapshot.theme === 'dark')
+        setPreferenceStatus(snapshot.storage_mode === 'firestore' ? 'saved' : 'memory')
+      })
+      .catch(() => {
+        if (!disposed) setPreferenceStatus('error')
+      })
+    return () => { disposed = true }
+  }, [])
+
+  const rememberPreferences = async () => {
+    setPreferenceStatus('saving')
+    try {
+      const snapshot = await saveUserPreferences(anonymousUserIdRef.current, {
+        accessibility_mode: mode,
+        profile_detail: profileDetail,
+        speech_rate: speechRate,
+        theme: dark ? 'dark' : 'light',
+      })
+      window.localStorage.setItem('taipei-pulse-remember-preferences', 'true')
+      setPreferenceStatus(snapshot.storage_mode === 'firestore' ? 'saved' : 'memory')
+    } catch {
+      setPreferenceStatus('error')
+    }
+  }
 
   const changeSpeechRate = (rate: number) => {
     stopSpeaking()
@@ -370,7 +421,7 @@ export default function App() {
       return
     }
     tourFrameRef.current = window.requestAnimationFrame(animateRouteTour)
-  }, [syncTourFacilityMarkers])
+  }, [returnToFirstNavigationStep, syncTourFacilityMarkers])
 
   const startRouteTour = useCallback(() => {
     const map = mapRef.current
@@ -482,7 +533,7 @@ export default function App() {
       setNavigationCue(null)
       setTourStatus('paused')
     }
-  }, [cancelTourTimers, syncTourFacilityMarkers, tourStatus])
+  }, [cancelTourTimers, returnToFirstNavigationStep, syncTourFacilityMarkers, tourStatus])
 
   const jumpToRouteStep = useCallback((stepIndex: number) => {
     const route = selectedRouteRef.current
@@ -527,6 +578,7 @@ export default function App() {
   // Map ready: 添加捷運站與政府開放資料的互動標記
   const handleMapReady = useCallback((map: Map3DElementLike, lib: Maps3dLibrary) => {
     mapRef.current = map
+    mapsLibRef.current = lib
     accessibilityMarkersRef.current = { metro_exit: [], metro_access: [], curb_ramp: [], public_toilet: [], audible_signal: [] }
     facilityByMarkerRef.current.clear()
     const defaultLayers = { metro_exit: true, metro_access: false, curb_ramp: false, public_toilet: false, audible_signal: false }
@@ -619,6 +671,8 @@ export default function App() {
     routeLinesRef.current = selectedRouteRef.current
       ? drawRoute(map, lib, selectedRouteRef.current)
       : []
+    trafficLayerRef.current?.destroy()
+    trafficLayerRef.current = createTrafficLayer(map, lib, setSelectedTrafficVehicle)
   }, [syncTourFacilityMarkers])
 
   useEffect(() => {
