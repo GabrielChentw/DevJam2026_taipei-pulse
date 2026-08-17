@@ -12,8 +12,23 @@ keysync.txt
 gpu.txt
 chromegpu*.txt
 verify.txt
+verify_geo.txt
 apitest.txt
 build-out.txt
+gitstate.txt
+remote*.txt
+remotecheck.txt
+sample_response.json
+importcheck.txt
+agentverify.txt
+pipinstall.txt
+dotenvinstall.txt
+chattest.txt
+chattest.ps1
+f1.txt
+f2.txt
+f3.txt
+fsummary.txt
 COMMIT_MSG.tmp
 
 # env

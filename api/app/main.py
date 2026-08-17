@@ -9,11 +9,17 @@
 
 from __future__ import annotations
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
+from .agent import chat as agent_chat
 from .engine import plan as planner
-from .models import CompareResponse, PlanRequest, PlanResponse, ProfileSummary
+from .models import ChatRequest, ChatResponse, CompareResponse, PlanRequest, PlanResponse, ProfileSummary
+
+# chat.py 在第一次呼叫時才延遲讀取 os.environ["GEMINI_API_KEY"]，
+# 所以這裡放在 import 之後也沒問題，只要在第一個 request 進來之前執行過即可。
+load_dotenv()
 
 app = FastAPI(
     title="Taipei Pulse API",
@@ -72,3 +78,26 @@ def get_compare(
         return planner.compare(origin, destination, profile_ids)
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+@app.post("/api/chat", response_model=ChatResponse)
+def post_chat(request: ChatRequest) -> ChatResponse:
+    """對話式路線規劃。前端只需要維護一個穩定的 session_id 並持續打這個端點。
+
+    需要環境變數 GEMINI_API_KEY（未設定時回 503，錯誤訊息含取得金鑰的連結）。
+    """
+    try:
+        reply, camera_commands, plan_result, compare_result, history = agent_chat.send_message(
+            request.session_id, request.message
+        )
+    except agent_chat.AgentUnavailableError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+
+    return ChatResponse(
+        session_id=request.session_id,
+        reply=reply,
+        camera_commands=camera_commands,
+        plan=plan_result,
+        compare=compare_result,
+        history=history,
+    )

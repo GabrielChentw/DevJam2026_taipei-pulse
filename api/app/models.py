@@ -151,3 +151,43 @@ class CompareResponse(BaseModel):
     destination: str
     results: dict[str, PlanResponse]
     divergence: str = ""
+
+
+# ---------- Agent 對話 ----------
+
+
+class CameraCommand(BaseModel):
+    """Agent 要求地圖執行的相機動作。前端依 action 決定呼叫哪個 Map3DElement 方法。
+
+    這個型別是前端與 agent 唯一的耦合點：agent 不直接操作地圖，只回傳「意圖」，
+    前端保有如何呈現的最終決定權（例如動畫時長、緩動曲線）。
+    """
+
+    action: Literal["fly_to", "show_route", "orbit"]
+    # fly_to: center 必填。show_route: route_candidate_id 必填。orbit: center 必填。
+    center: LatLngPoint | None = None
+    range: float | None = None
+    tilt: float | None = None
+    heading: float | None = None
+    route_candidate_id: str | None = None
+
+
+class ChatMessage(BaseModel):
+    role: Literal["user", "agent"]
+    text: str
+
+
+class ChatRequest(BaseModel):
+    session_id: str = Field(description="前端產生一個穩定的 id（例如 crypto.randomUUID()），同一次對話全程帶同一個。")
+    message: str
+
+
+class ChatResponse(BaseModel):
+    session_id: str
+    reply: str
+    camera_commands: list[CameraCommand] = Field(default_factory=list)
+    # agent 呼叫 plan/compare 工具後的結果，前端可直接拿來畫路線疊圖，
+    # 不需要自己再打一次 /api/plan。為 None 代表這輪對話還沒觸發規劃。
+    plan: PlanResponse | None = None
+    compare: CompareResponse | None = None
+    history: list[ChatMessage] = Field(default_factory=list)

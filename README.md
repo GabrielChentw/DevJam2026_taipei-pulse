@@ -67,14 +67,18 @@
 
 逐步操作與疑難排解見 **[`docs/setup-gcp.md`](docs/setup-gcp.md)**。
 
-### 後端（路線評分引擎）
+### 後端（路線評分引擎 + Agent）
 
 ```powershell
 cd api
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe verify_engine.py     # 驗證差異化行為
-.\.venv\Scripts\python.exe -m uvicorn app.main:app --port 8000
+Copy-Item .env.example .env
+# 編輯 .env，填入 GEMINI_API_KEY（到 https://aistudio.google.com/app/apikey 取得）
+.\.venv\Scripts\python.exe verify_engine.py       # 驗證差異化行為
+.\.venv\Scripts\python.exe verify_geometry.py     # 驗證幾何資料完整
+.\.venv\Scripts\python.exe verify_agent_tools.py  # 驗證 agent 工具（不需要金鑰）
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --port 8000 --reload
 ```
 
 `verify_engine.py` 會把引擎的判斷完整攤開，並斷言五項核心行為。它不是單元測試，
@@ -88,6 +92,12 @@ API 文件在 <http://127.0.0.1:8000/docs>。核心端點：
 | `GET /api/compare` | 同一組起終點、多 profile 並列。這是專案的核心論證 |
 | `GET /api/profiles` | 可用的障礙 profile 與可對話調整的參數 |
 | `GET /api/corridor` | 走廊無障礙種子資料，含每筆的 confidence |
+| `POST /api/chat` | 對話式規劃。Gemini 透過 function calling 呼叫上面的規劃工具，回傳文字回覆 + 相機指令 + 完整規劃結果 |
+
+`/api/chat` 需要 `GEMINI_API_KEY`，未設定時回 HTTP 503 並附取得金鑰的連結，
+不會讓其他端點跟著壞掉。Agent 不使用完整的 ADK 框架——直接用 `google-genai`
+的自動 function calling（把既有引擎包成 Python 函式當 tools 傳入），理由與
+取捨寫在 `api/app/agent/chat.py` 開頭的註解。
 
 > **安全性**：後端目前**沒有身分驗證**，僅供本機開發與 demo。部署到公開網址前必須
 > 加上驗證與速率限制 —— 屆時它會開始接收使用者的無障礙需求，那是敏感個人資料。
@@ -169,14 +179,15 @@ web/
 
 | 角色 | 負責 | 依賴 |
 | --- | --- | --- |
-| 前端 | 3D 地圖疊路線、輪椅 vs 視障並排對比畫面、相機飛行 | `docs/api-contract.md`，可先用假資料開工 |
-| Agent | ADK + Gemini，對話追問需求、呼叫 `/api/plan`、控制地圖相機 | 同上，`/docs` 有互動測試介面 |
-| 後端（此 repo 主線）| 引擎、種子資料、契約文件、整合、demo 腳本 | — |
+| 前端 A | 3D 地圖疊路線、輪椅 vs 視障並排對比畫面、相機飛行 | `docs/api-contract.md`，可先用假資料開工 |
+| 前端 B | 對話介面（輸入框、訊息氣泡），串 `POST /api/chat` | 同上，agent 的理解/決策邏輯已在後端做好 |
+| 後端（此 repo 主線）| 引擎、種子資料、agent 工具與對話邏輯、契約文件、整合、demo 腳本 | — |
 
 前端要串接的完整說明在 **[`docs/api-contract.md`](docs/api-contract.md)**，
 含 curl 範例、TypeScript 型別（`web/src/types/api.ts`）、疊路線的邏輯建議、
-以及幾個容易踩的坑（`Feature.value` 為 `null` 不是 `false`、`geometry_precision`
-的意義）。
+Agent 的 `/api/chat` 說明（`CameraCommand` 怎麼轉成相機動作），以及幾個容易
+踩的坑（`Feature.value` 為 `null` 不是 `false`、`geometry_precision` 的意義、
+`plan`/`compare` 為 `null` 是正常情況）。
 
 ## 目前進度
 
@@ -187,8 +198,9 @@ web/
 - [x] Profile 驅動的路線評分引擎（輪椅 / 視障 / 高齡，五項行為驗證通過）
 - [x] 路段幾何資料（17 個 leg 皆可畫圖，`verify_geometry.py` 驗證）
 - [x] 前端 API 契約文件與型別定義
+- [x] Agent 對話邏輯（function calling 呼叫規劃引擎、產生相機指令，`verify_agent_tools.py` 驗證）
 - [ ] 前端接上路線引擎，3D 地圖疊路線
-- [ ] ADK Agent 與對話介面
+- [ ] 前端接上 `/api/chat`，對話介面
 - [ ] 巴士 3D 移動動畫
 
 ### 引擎目前的實際輸出

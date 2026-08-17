@@ -124,6 +124,83 @@ for (const leg of route.legs) {
 缺漏而非確定不可行 —— 這種情況建議用不同的視覺樣式（例如「資料不足」標籤），
 跟真的違反硬條件的排除區分開來。
 
+## `POST /api/chat` —— 對話介面要串的端點
+
+給負責對話 UI 的人看。**agent 的大腦（理解需求、決定呼叫哪個工具、產生回覆文字）
+已經做好在後端**，前端只需要做輸入框、訊息氣泡、把 `camera_commands` 轉交給地圖元件。
+
+### 呼叫方式
+
+```ts
+import { sendChatMessage } from '../lib/api';
+
+// sessionId 用 crypto.randomUUID() 產生一次，存在 useState/useRef，整次對話重複使用。
+const response = await sendChatMessage(sessionId, '我坐輪椅，要從台北車站到市政府');
+```
+
+### 回應裡要看的欄位
+
+```ts
+{
+  reply: string,                    // 直接顯示成一則 agent 訊息
+  camera_commands: CameraCommand[], // 交給地圖元件執行，見下方
+  plan: PlanResponse | null,        // 這輪若觸發了規劃，完整結果在這裡
+  compare: CompareResponse | null,  // 這輪若觸發了比較，完整結果在這裡
+  history: ChatMessage[],           // 完整對話歷史，可用來重新渲染整個對話串
+}
+```
+
+`plan` / `compare` 為 `null` 是正常情況——代表這輪對話 agent 判斷不需要呼叫規劃
+工具（例如使用者在回答 agent 的追問，還沒問到具體路線）。**不要把 `null` 當成
+錯誤**，UI 上只顯示 `reply` 文字即可。
+
+一旦 `plan` 非 null，它的 `feasible[].legs[].path` 就是可以直接疊圖的座標，跟
+`POST /api/plan` 回傳的東西結構完全一樣——**不需要在對話觸發規劃後再手動呼叫
+一次 `/api/plan`**，agent 那次呼叫的完整結果已經包在 `ChatResponse` 裡了。
+
+### CameraCommand —— agent 如何指揮地圖
+
+```ts
+{
+  action: 'fly_to',           // 目前 agent 只會產生這個 action
+  center: { lat, lng, altitude },
+  range: 1800,
+  tilt: 60,
+  heading: 30,
+  route_candidate_id: 'metro-direct',
+}
+```
+
+建議的處理邏輯：
+
+```ts
+for (const cmd of response.camera_commands) {
+  if (cmd.action === 'fly_to' && cmd.center) {
+    map.flyCameraTo({
+      endCamera: { center: cmd.center, range: cmd.range, tilt: cmd.tilt, heading: cmd.heading },
+      durationMillis: 2500,
+    });
+  }
+}
+```
+
+`agent` 決定「該飛去哪」，但飛行的動畫時長、緩動曲線由前端決定——這是刻意的
+分工，agent 不直接操作 `Map3DElement`。
+
+### 一個重要的環境需求
+
+`/api/chat` 需要後端設定 `GEMINI_API_KEY`（見 `api/.env.example`）。**沒設定時
+會回 HTTP 503**，`detail` 欄位是可以直接顯示的中文錯誤訊息，附取得金鑰的連結。
+建議 UI 對 503 做特別處理（例如顯示「AI 助理暫時無法使用」而非泛用錯誤畫面），
+因為這在 demo 前是最容易忘記設定的一步。
+
+### 已知限制
+
+- Session 存在後端記憶體，**重啟後端會清空所有對話**。demo 前重啟後端記得
+  提醒自己第一句話要重講。
+- 每輪對話都會累積完整歷史一起送給 Gemini，目前沒有做歷史裁剪，長對話
+  （幾十輪以上）可能變慢或超過 context 上限，一日 demo 用不到這個量級。
+
 ## 已知限制（demo 前请注意）
 
 - 只有台北車站 ↔ 台北市政府這一組起終點有資料。打其他起終點 `feasible` 和

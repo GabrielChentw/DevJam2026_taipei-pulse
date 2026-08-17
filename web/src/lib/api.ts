@@ -6,6 +6,8 @@
  */
 
 import type {
+  ChatRequest,
+  ChatResponse,
   CompareResponse,
   PlanRequest,
   PlanResponse,
@@ -52,4 +54,16 @@ export function compareProfiles(
     profiles: profileIds.join(','),
   });
   return request(`/compare?${params.toString()}`);
+}
+
+/**
+ * 對話式路線規劃。sessionId 由呼叫端產生並在整次對話中重複使用
+ * （例如 crypto.randomUUID()，存在 useState 或 useRef 裡，不要每次訊息都重新產生）。
+ */
+export function sendChatMessage(sessionId: string, message: string): Promise<ChatResponse> {
+  const body: ChatRequest = { session_id: sessionId, message };
+  return request('/chat', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
 }

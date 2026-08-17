@@ -134,3 +134,43 @@ export interface CompareResponse {
   /** 兩個 profile 的建議是否不同、為什麼不同的人類可讀說明。 */
   divergence: string;
 }
+
+// ---------- Agent 對話 ----------
+
+/**
+ * Agent 要求地圖執行的相機動作。這是 agent 與地圖唯一的耦合點：
+ * agent 不直接操作 Map3DElement，只回傳「意圖」，前端保留呈現方式的決定權
+ * （動畫時長、緩動曲線都由前端決定）。
+ */
+export interface CameraCommand {
+  action: 'fly_to' | 'show_route' | 'orbit';
+  /** fly_to / orbit 必填。 */
+  center?: LatLngPoint | null;
+  range?: number | null;
+  tilt?: number | null;
+  heading?: number | null;
+  /** show_route 必填，對應 EvaluatedRoute.candidate_id。 */
+  route_candidate_id?: string | null;
+}
+
+export interface ChatMessage {
+  role: 'user' | 'agent';
+  text: string;
+}
+
+export interface ChatRequest {
+  /** 前端產生一個穩定的 id（例如 crypto.randomUUID()），同一次對話全程帶同一個。 */
+  session_id: string;
+  message: string;
+}
+
+export interface ChatResponse {
+  session_id: string;
+  reply: string;
+  camera_commands: CameraCommand[];
+  /** agent 這輪若呼叫了規劃工具，完整結果會在這裡；否則為 null。 */
+  plan: PlanResponse | null;
+  compare: CompareResponse | null;
+  /** 完整對話歷史，含這一輪剛送出的訊息與回覆。 */
+  history: ChatMessage[];
+}
