@@ -1,0 +1,21 @@
+node_modules/
+dist/
+build/
+docs/build/
+*.log
+*.tsbuildinfo
+
+# env
+.env
+.env.local
+.env.*.local
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# os / editor
+.DS_Store
+Thumbs.db

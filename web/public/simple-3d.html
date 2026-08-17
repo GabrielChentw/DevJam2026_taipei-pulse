@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>最小 3D 地圖測試</title>
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, 'Segoe UI', sans-serif; }
+    html, body { margin: 0; height: 100%; background: #0d1117; color: #e6edf3; }
+    body { display: flex; flex-direction: column; }
+    header { padding: 0.6rem 0.9rem; border-bottom: 1px solid #30363d; background: #161b22; }
+    header h1 { margin: 0 0 0.2rem; font-size: 0.95rem; }
+    #log { margin: 0; font-size: 0.78rem; font-family: ui-monospace, Consolas, monospace; color: #9198a1; white-space: pre-wrap; word-break: break-word; max-height: 9rem; overflow: auto; }
+    #holder { flex: 1; min-height: 0; background: #000; }
+    gmp-map-3d { width: 100%; height: 100%; display: block; }
+    a { color: #4493f8; }
+    .ok { color: #3fb950; }
+    .bad { color: #f85149; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>最小 3D 地圖測試（無 iframe、無 React、無抽象層）</h1>
+    <pre id="log">啟動中…</pre>
+  </header>
+  <div id="holder"></div>
+
+  <script>
+    // 這個頁面刻意寫得笨。它就是 Google 官方最小範例，只多了把訊息印在畫面上。
+    // maps-3d-test.html 用了動態 iframe，那引入了「Maps API 在 about:blank 裡如何
+    // 判定頁面來源」這個沒被驗證的變數，所以它的結果不可信。這個頁面沒有那個問題。
+    //
+    // 用法：
+    //   /simple-3d.html?key=YOUR_KEY            預設 weekly
+    //   /simple-3d.html?key=YOUR_KEY&v=beta     指定通道
+    //   /simple-3d.html?key=YOUR_KEY&v=alpha
+
+    const logEl = document.getElementById('log');
+    const lines = [];
+
+    function log(msg, cls) {
+      const stamp = new Date().toISOString().slice(11, 19);
+      lines.push((cls ? `<span class="${cls}">` : '') + `[${stamp}] ${msg}` + (cls ? '</span>' : ''));
+      logEl.innerHTML = lines.join('\n');
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    // 把 console 完整搬到畫面上，不做任何過濾。
+    for (const method of ['error', 'warn', 'log']) {
+      const original = console[method].bind(console);
+      console[method] = (...args) => {
+        const text = args.map((a) => (typeof a === 'string' ? a : String(a))).join(' ');
+        if (/google|maps|webgl|gl_|gpu/i.test(text)) log(`console.${method}: ${text}`);
+        original(...args);
+      };
+    }
+
+    window.addEventListener('error', (e) => log(`window error: ${e.message}`, 'bad'));
+    window.addEventListener('unhandledrejection', (e) => log(`unhandled rejection: ${e.reason}`, 'bad'));
+    window.gm_authFailure = () => log('gm_authFailure：Google 拒絕了這個金鑰', 'bad');
+
+    const params = new URLSearchParams(location.search);
+    const apiKey = params.get('key') || localStorage.getItem('gmpKey') || '';
+    const version = params.get('v') || 'weekly';
+
+    if (apiKey) localStorage.setItem('gmpKey', apiKey);
+
+    log(`頁面網址：${location.href.replace(apiKey, '<KEY>')}`);
+    log(`版本通道：${version}`);
+
+    // WebGL 能力檢查
+    (function () {
+      const canvas = document.createElement('canvas');
+      const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
+      if (!gl) { log('WebGL：不可用', 'bad'); return; }
+      const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+      const renderer = dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : '(未知)';
+      log(`WebGL：${gl instanceof WebGL2RenderingContext ? 'webgl2' : 'webgl1'} / ${renderer}`);
+    })();
+
+    if (!apiKey) {
+      log('沒有金鑰。用 ?key=YOUR_KEY 開啟這個頁面。', 'bad');
+    } else {
+      // Google 官方的 inline bootstrap loader。這是文件推薦的載入方式。
+      (g => {
+        var h, a, k, p = 'The Google Maps JavaScript API', c = 'google', l = 'importLibrary', q = '__ib__',
+            m = document, b = window;
+        b = b[c] || (b[c] = {});
+        var d = b.maps || (b.maps = {}), r = new Set(), e = new URLSearchParams(),
+            u = () => h || (h = new Promise(async (f, n) => {
+              a = m.createElement('script');
+              e.set('libraries', [...r] + '');
+              for (k in g) e.set(k.replace(/[A-Z]/g, t => '_' + t[0].toLowerCase()), g[k]);
+              e.set('callback', c + '.maps.' + q);
+              a.src = `https://maps.${c}apis.com/maps/api/js?` + e;
+              d[q] = f;
+              a.onerror = () => (h = n(Error(p + ' could not load.')));
+              a.nonce = m.querySelector('script[nonce]')?.nonce || '';
+              m.head.append(a);
+            }));
+        d[l] ? console.warn(p + ' only loads once. Ignoring:', g)
+             : d[l] = (f, ...n) => r.add(f) && u().then(() => d[l](f, ...n));
+      })({ key: apiKey, v: version });
+
+      (async () => {
+        try {
+          log('呼叫 importLibrary("maps3d")…');
+          const { Map3DElement, MapMode } = await google.maps.importLibrary('maps3d');
+          log('importLibrary 成功', 'ok');
+          log(`MapMode 可用值：${MapMode ? Object.keys(MapMode).join(', ') : '(undefined)'}`);
+
+          const map = new Map3DElement({
+            center: { lat: 25.0339, lng: 121.5645, altitude: 60 },
+            range: 1500,
+            tilt: 70,
+            heading: 320,
+            mode: MapMode?.SATELLITE ?? 'SATELLITE',
+          });
+          log('Map3DElement 已建立');
+
+          map.addEventListener('gmp-steadystate', () => log('gmp-steadystate：渲染完成 ✓', 'ok'));
+          map.addEventListener('gmp-error', (e) => log(`gmp-error: ${e.type}`, 'bad'));
+
+          document.getElementById('holder').appendChild(map);
+          log('已掛上 DOM，等待渲染…');
+
+          setTimeout(() => {
+            const text = document.getElementById('holder').textContent || '';
+            if (/development purposes only|僅供開發使用/i.test(text)) {
+              log('地圖區域出現「僅供開發使用」浮水印', 'bad');
+            }
+          }, 6000);
+        } catch (error) {
+          log(`失敗：${error?.message ?? error}`, 'bad');
+          if (error?.stack) log(error.stack);
+        }
+      })();
+    }
+  </script>
+</body>
+</html>

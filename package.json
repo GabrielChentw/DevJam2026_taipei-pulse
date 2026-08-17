@@ -1,0 +1,15 @@
+{
+  "name": "taipei-pulse-docs",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Diagram tooling for Taipei Pulse architecture docs",
+  "scripts": {
+    "prediagrams": "node -e \"require('fs').mkdirSync('docs/build',{recursive:true})\"",
+    "diagrams": "mmdc -i docs/architecture.md -o docs/build/architecture.md -e png -t neutral -b white --width 2000",
+    "prediagrams:svg": "node -e \"require('fs').mkdirSync('docs/build',{recursive:true})\"",
+    "diagrams:svg": "mmdc -i docs/architecture.md -o docs/build/architecture.svg.md -e svg -t neutral -b white"
+  },
+  "devDependencies": {
+    "@mermaid-js/mermaid-cli": "11.4.2"
+  }
+}

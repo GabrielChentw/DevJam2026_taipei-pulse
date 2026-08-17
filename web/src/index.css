@@ -1,0 +1,215 @@
+:root {
+  --bg: #0d1117;
+  --panel: #161b22;
+  --border: #30363d;
+  --text: #e6edf3;
+  --muted: #9198a1;
+  --accent: #4493f8;
+  --danger: #f85149;
+  --ok: #3fb950;
+
+  color-scheme: dark;
+  font-family: 'Noto Sans TC', system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+}
+
+.app {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  height: 100%;
+}
+
+.app-header {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  padding: 0.75rem 1.25rem;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 1.15rem;
+  letter-spacing: 0.02em;
+}
+
+.app-tagline {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.status-pill {
+  margin-left: auto;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  border: 1px solid var(--border);
+}
+
+.status-loading {
+  color: var(--muted);
+}
+
+.status-ready {
+  color: var(--ok);
+  border-color: color-mix(in srgb, var(--ok) 40%, transparent);
+}
+
+.status-error {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 40%, transparent);
+}
+
+.app-body {
+  position: relative;
+  min-height: 0;
+}
+
+.map-root {
+  position: relative;
+  height: 100%;
+}
+
+.map-canvas {
+  height: 100%;
+}
+
+.map-overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 2rem;
+  background: var(--bg);
+}
+
+/*
+ * 圖磚串流中的角標。刻意不遮擋地圖 —— Photorealistic 3D 圖磚要花數秒到數十秒
+ * 才會全部載完，期間地圖是可用的，用全屏遮罩蓋住只會讓人以為壞了。
+ */
+.map-tiles-badge {
+  position: absolute;
+  top: 0.75rem;
+  left: 0.75rem;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgb(13 17 23 / 78%);
+  backdrop-filter: blur(4px);
+  font-size: 0.75rem;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.map-error {
+  max-width: 42rem;
+  border: 1px solid color-mix(in srgb, var(--danger) 40%, transparent);
+  border-radius: 8px;
+  padding: 1.25rem 1.5rem;
+  background: color-mix(in srgb, var(--danger) 8%, var(--panel));
+}
+
+.map-error h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  color: var(--danger);
+}
+
+.map-error p {
+  margin: 0.4rem 0;
+  line-height: 1.6;
+  font-size: 0.9rem;
+}
+
+.map-error-hint {
+  color: var(--muted);
+}
+
+.map-error-code {
+  font-size: 0.85rem;
+}
+
+.map-error-raw {
+  max-height: 12rem;
+  overflow: auto;
+  margin: 0.75rem 0;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: rgb(0 0 0 / 35%);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.map-error-raw code {
+  background: none;
+  padding: 0;
+  color: var(--text);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.map-error code {
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  background: rgb(255 255 255 / 8%);
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  font-size: 0.9em;
+  color: var(--accent);
+}
+
+.camera-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.75rem 1.25rem;
+  background: var(--panel);
+  border-top: 1px solid var(--border);
+}
+
+.camera-bar button {
+  padding: 0.45rem 0.9rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.camera-bar button:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.camera-bar button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.camera-bar button.is-active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.camera-bar button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
