@@ -25,8 +25,15 @@ import {
 } from './lib/routeTour'
 import type { AccessibilityMode, AppPhase, Message, PlannedRoute } from './types'
 import type { AgentResponse } from './mockData'
-import type { TrafficSceneSnapshot, TrafficVehicle, TransitArrivalSnapshot } from './types/api'
-import { getSpeechRate, setSpeechRate as persistSpeechRate, SPEECH_RATES, speak, stopSpeaking } from './lib/speech'
+import { getSpeechRate, setSpeechRate as persistSpeechRate, SPEECH_RATES, stopSpeaking } from './lib/speech'
+import {
+  audibleSignalsNearRoute,
+  curbRampsNearRoute,
+  facilityDescription,
+  loadAccessibilityFacilities,
+  metroFacilitiesNearRoute,
+  type AccessibilityFacility,
+} from './lib/accessibilityFacilities'
 
 const ROUTE_COLORS: Record<PlannedRoute['steps'][number]['type'], string> = {
   walk: '#34A853',
@@ -97,6 +104,19 @@ function cameraForTourFrame(mode: TourMode, stepIndex: number) {
   return mode === 'walk' && stepIndex === 0 ? TOUR_WALK_ENTRY_CAMERA : TOUR_CAMERA[mode]
 }
 
+function distanceMeters(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
+  const meanLat = (a.lat + b.lat) / 2 * Math.PI / 180
+  const dx = (a.lng - b.lng) * 111_320 * Math.cos(meanLat)
+  const dy = (a.lat - b.lat) * 110_574
+  return Math.hypot(dx, dy)
+}
+
+const TOUR_FACILITY_RADIUS: Record<TourMode, Record<AccessibilityFacility['kind'], number>> = {
+  walk: { metro_exit: 120, metro_access: 110, curb_ramp: 65, public_toilet: 140, audible_signal: 80 },
+  mrt: { metro_exit: 240, metro_access: 210, curb_ramp: 0, public_toilet: 0, audible_signal: 0 },
+  bus: { metro_exit: 0, metro_access: 0, curb_ramp: 90, public_toilet: 110, audible_signal: 0 },
+}
+
 function drawRoute(
   map: Map3DElementLike,
   lib: Maps3dLibrary,
@@ -133,9 +153,13 @@ export default function App() {
   const [mode, setMode]                 = useState<AccessibilityMode>('general')
   const [dark, setDark]                 = useState(false)
   const [speechRate, setSpeechRate]     = useState(getSpeechRate)
+  const [speechAutoPlay, setSpeechAutoPlay] = useState(
+    () => window.localStorage.getItem('taipei-pulse-speech-auto-play') !== 'false',
+  )
   const [messages, setMessages]         = useState<Message[]>([])
   const [routes, setRoutes]             = useState<PlannedRoute[]>([])
   const [selectedRoute, setSelectedRoute] = useState<PlannedRoute | null>(null)
+  const autoNarratedRoutesRef = useRef<PlannedRoute[] | null>(null)
 
   const [mapStatus, setMapStatus]       = useState<MapStatus>({ kind: 'loading' })
   const [transitioning, setTransitioning] = useState(false)
@@ -144,9 +168,15 @@ export default function App() {
   const mapsLibRef = useRef<Maps3dLibrary | null>(null)
   const selectedRouteRef = useRef<PlannedRoute | null>(null)
   const routeLinesRef = useRef<HTMLElement[]>([])
-  const transitMarkerRef = useRef<Model3DElementLike | null>(null)
-  const transitSnapshotRef = useRef<TransitArrivalSnapshot | null>(null)
-  const trafficLayerRef = useRef<TrafficLayerHandle | null>(null)
+  const accessibilityMarkersRef = useRef<Record<AccessibilityFacility['kind'], HTMLElement[]>>({
+    metro_exit: [],
+    metro_access: [],
+    curb_ramp: [],
+    public_toilet: [],
+    audible_signal: [],
+  })
+  const facilityByMarkerRef = useRef(new Map<HTMLElement, AccessibilityFacility>())
+  const visibleFacilityLayersRef = useRef({ metro_exit: true, metro_access: false, curb_ramp: false, public_toilet: false, audible_signal: false })
   const tourTimelineRef = useRef<RouteTourTimeline | null>(null)
   const tourFrameRef = useRef<number | null>(null)
   const tourLaunchTimeoutRef = useRef<number | null>(null)
@@ -156,63 +186,26 @@ export default function App() {
   const tourSpeedRef = useRef(1)
   const tourHeadingRef = useRef(0)
   const tourLastUiUpdateRef = useRef(0)
-  const [tourStatus, setTourStatus] = useState<'idle' | 'running' | 'paused' | 'returning' | 'navigation-ready'>('idle')
+  const tourPositionRef = useRef<{ lat: number; lng: number } | null>(null)
+  const tourCurrentModeRef = useRef<TourMode>('walk')
+  const [tourStatus, setTourStatus] = useState<'idle' | 'running' | 'paused' | 'completed'>('idle')
   const [tourProgress, setTourProgress] = useState(0)
   const [tourMode, setTourMode] = useState<TourMode>('walk')
   const [tourStepIndex, setTourStepIndex] = useState(0)
   const [tourSpeed, setTourSpeed] = useState(1)
-  const [navigationCue, setNavigationCue] = useState<FirstNavigationCue | null>(null)
-  const [transitSnapshot, setTransitSnapshot] = useState<TransitArrivalSnapshot | null>(null)
-  const [transitLoading, setTransitLoading] = useState(false)
-  const [transitError, setTransitError] = useState<string | null>(null)
-  const [trafficScene, setTrafficScene] = useState<TrafficSceneSnapshot | null>(null)
-  const [trafficSceneError, setTrafficSceneError] = useState<string | null>(null)
-  const [selectedTrafficVehicle, setSelectedTrafficVehicle] = useState<TrafficVehicle | null>(null)
-  const [trafficLayerVisible, setTrafficLayerVisible] = useState(true)
-  const [activePreset, setActivePreset] = useState<string>('cityHall')
-  const anonymousUserIdRef = useRef(getAnonymousUserId())
-  const [profileDetail, setProfileDetail] = useState('')
-  const [preferenceStatus, setPreferenceStatus] = useState<'idle' | 'saving' | 'saved' | 'memory' | 'error'>('idle')
-
-  useEffect(() => {
-    if (window.localStorage.getItem('taipei-pulse-remember-preferences') !== 'true') return
-    let disposed = false
-    fetchUserPreferences(anonymousUserIdRef.current)
-      .then(snapshot => {
-        if (disposed || !snapshot.updated_at) return
-        setMode(snapshot.accessibility_mode)
-        setProfileDetail(snapshot.profile_detail)
-        setSpeechRate(snapshot.speech_rate)
-        persistSpeechRate(snapshot.speech_rate)
-        setDark(snapshot.theme === 'dark')
-        setPreferenceStatus(snapshot.storage_mode === 'firestore' ? 'saved' : 'memory')
-      })
-      .catch(() => {
-        if (!disposed) setPreferenceStatus('error')
-      })
-    return () => { disposed = true }
-  }, [])
-
-  const rememberPreferences = async () => {
-    setPreferenceStatus('saving')
-    try {
-      const snapshot = await saveUserPreferences(anonymousUserIdRef.current, {
-        accessibility_mode: mode,
-        profile_detail: profileDetail,
-        speech_rate: speechRate,
-        theme: dark ? 'dark' : 'light',
-      })
-      window.localStorage.setItem('taipei-pulse-remember-preferences', 'true')
-      setPreferenceStatus(snapshot.storage_mode === 'firestore' ? 'saved' : 'memory')
-    } catch {
-      setPreferenceStatus('error')
-    }
-  }
+  const [selectedFacility, setSelectedFacility] = useState<AccessibilityFacility | null>(null)
+  const [facilityPopoverPosition, setFacilityPopoverPosition] = useState<{ left: number; top: number; width: number } | null>(null)
+  const [visibleFacilityLayers, setVisibleFacilityLayers] = useState({ metro_exit: true, metro_access: false, curb_ramp: false, public_toilet: false, audible_signal: false })
 
   const changeSpeechRate = (rate: number) => {
     stopSpeaking()
     setSpeechRate(rate)
     persistSpeechRate(rate)
+  }
+  const changeSpeechAutoPlay = (enabled: boolean) => {
+    if (!enabled) stopSpeaking()
+    setSpeechAutoPlay(enabled)
+    window.localStorage.setItem('taipei-pulse-speech-auto-play', String(enabled))
   }
   const cancelTourTimers = useCallback(() => {
     if (tourFrameRef.current !== null) {
@@ -229,12 +222,57 @@ export default function App() {
     }
   }, [])
 
+  const setFacilityLayerVisibility = useCallback((kind: AccessibilityFacility['kind'], visible: boolean) => {
+    const next = { ...visibleFacilityLayersRef.current, [kind]: visible }
+    visibleFacilityLayersRef.current = next
+    setVisibleFacilityLayers(next)
+    for (const marker of accessibilityMarkersRef.current[kind]) {
+      if (visible && !tourTimelineRef.current) mapRef.current?.append(marker)
+      else marker.remove()
+    }
+    if (!visible) {
+      setSelectedFacility(previous => previous?.kind === kind ? null : previous)
+      setFacilityPopoverPosition(null)
+    }
+  }, [])
+
+  const syncTourFacilityMarkers = useCallback((position: { lat: number; lng: number }, tourModeNow: TourMode) => {
+    const map = mapRef.current
+    if (!map) return
+    tourPositionRef.current = position
+    tourCurrentModeRef.current = tourModeNow
+
+    for (const kind of ['metro_exit', 'metro_access', 'curb_ramp', 'public_toilet', 'audible_signal'] as const) {
+      const radius = TOUR_FACILITY_RADIUS[tourModeNow][kind]
+      for (const marker of accessibilityMarkersRef.current[kind]) {
+        const facility = facilityByMarkerRef.current.get(marker)
+        const shouldShow = Boolean(
+          facility
+          && visibleFacilityLayersRef.current[kind]
+          && radius > 0
+          && distanceMeters(position, facility) <= radius,
+        )
+        if (shouldShow && marker.parentElement !== map) map.append(marker)
+        if (!shouldShow && marker.parentElement === map) marker.remove()
+      }
+    }
+
+    setSelectedFacility(previous => {
+      if (!previous) return previous
+      const radius = TOUR_FACILITY_RADIUS[tourModeNow][previous.kind]
+      if (radius > 0 && distanceMeters(position, previous) <= radius) return previous
+      setFacilityPopoverPosition(null)
+      return null
+    })
+  }, [])
+
   const stopRouteTour = useCallback(() => {
     cancelTourTimers()
     mapRef.current?.stopCameraAnimation()
     tourTimelineRef.current = null
     tourElapsedRef.current = 0
     tourLastFrameAtRef.current = 0
+    tourPositionRef.current = null
     setTourProgress(0)
     setTourStepIndex(0)
     setNavigationCue(null)
@@ -320,6 +358,7 @@ export default function App() {
 
     if (now - tourLastUiUpdateRef.current > 180 || frame.finished) {
       tourLastUiUpdateRef.current = now
+      syncTourFacilityMarkers(frame.position, frame.mode)
       setTourProgress(frame.progress)
       setTourMode(frame.mode)
       setTourStepIndex(frame.stepIndex)
@@ -331,13 +370,18 @@ export default function App() {
       return
     }
     tourFrameRef.current = window.requestAnimationFrame(animateRouteTour)
-  }, [returnToFirstNavigationStep])
+  }, [syncTourFacilityMarkers])
 
   const startRouteTour = useCallback(() => {
     const map = mapRef.current
     if (!map || !selectedRouteRef.current) return
 
     if (tourStatus === 'paused' && tourTimelineRef.current) {
+      setFacilityLayerVisibility('metro_access', true)
+      setFacilityLayerVisibility('curb_ramp', true)
+      setFacilityLayerVisibility('public_toilet', true)
+      setFacilityLayerVisibility('audible_signal', true)
+      if (tourPositionRef.current) syncTourFacilityMarkers(tourPositionRef.current, tourCurrentModeRef.current)
       tourLastFrameAtRef.current = performance.now()
       setTourStatus('running')
       tourFrameRef.current = window.requestAnimationFrame(animateRouteTour)
@@ -357,6 +401,19 @@ export default function App() {
     setTourStatus('running')
 
     const firstFrame = routeTourFrameAt(timeline, 0)
+    // 鏡頭飛往導覽起點的過程先清空設施，抵達後才依當下視角逐批顯示，
+    // 避免起點與後續站點在導覽尚未到達前搶先出現。
+    setFacilityLayerVisibility('metro_access', true)
+    setFacilityLayerVisibility('curb_ramp', true)
+    setFacilityLayerVisibility('public_toilet', true)
+    setFacilityLayerVisibility('audible_signal', true)
+    for (const markers of Object.values(accessibilityMarkersRef.current)) {
+      for (const marker of markers) marker.remove()
+    }
+    setSelectedFacility(null)
+    setFacilityPopoverPosition(null)
+    tourPositionRef.current = firstFrame.position
+    tourCurrentModeRef.current = firstFrame.mode
     const firstCamera = cameraForTourFrame(firstFrame.mode, firstFrame.stepIndex)
     tourHeadingRef.current = firstFrame.heading
     map.stopCameraAnimation()
@@ -371,10 +428,11 @@ export default function App() {
     })
     tourLaunchTimeoutRef.current = window.setTimeout(() => {
       tourLaunchTimeoutRef.current = null
+      syncTourFacilityMarkers(firstFrame.position, firstFrame.mode)
       tourLastFrameAtRef.current = performance.now()
       tourFrameRef.current = window.requestAnimationFrame(animateRouteTour)
     }, 1450)
-  }, [animateRouteTour, cancelTourTimers, tourStatus])
+  }, [animateRouteTour, cancelTourTimers, setFacilityLayerVisibility, syncTourFacilityMarkers, tourStatus])
 
   const pauseRouteTour = useCallback(() => {
     cancelTourTimers()
@@ -416,6 +474,7 @@ export default function App() {
     setTourProgress(frame.progress)
     setTourMode(frame.mode)
     setTourStepIndex(frame.stepIndex)
+    syncTourFacilityMarkers(frame.position, frame.mode)
 
     if (frame.finished) {
       returnToFirstNavigationStep()
@@ -423,7 +482,7 @@ export default function App() {
       setNavigationCue(null)
       setTourStatus('paused')
     }
-  }, [returnToFirstNavigationStep, tourStatus])
+  }, [cancelTourTimers, syncTourFacilityMarkers, tourStatus])
 
   const jumpToRouteStep = useCallback((stepIndex: number) => {
     const route = selectedRouteRef.current
@@ -458,10 +517,23 @@ export default function App() {
     document.documentElement.setAttribute('data-access', mode === 'visual' ? 'visual' : '')
   }, [mode])
 
-  // Map ready: 添加捷運站標記
+  const toggleFacilityLayer = (kind: AccessibilityFacility['kind']) => {
+    setFacilityLayerVisibility(kind, !visibleFacilityLayersRef.current[kind])
+    if (tourTimelineRef.current && tourPositionRef.current) {
+      syncTourFacilityMarkers(tourPositionRef.current, tourCurrentModeRef.current)
+    }
+  }
+
+  // Map ready: 添加捷運站與政府開放資料的互動標記
   const handleMapReady = useCallback((map: Map3DElementLike, lib: Maps3dLibrary) => {
     mapRef.current = map
-    mapsLibRef.current = lib
+    accessibilityMarkersRef.current = { metro_exit: [], metro_access: [], curb_ramp: [], public_toilet: [], audible_signal: [] }
+    facilityByMarkerRef.current.clear()
+    const defaultLayers = { metro_exit: true, metro_access: false, curb_ramp: false, public_toilet: false, audible_signal: false }
+    visibleFacilityLayersRef.current = defaultLayers
+    setVisibleFacilityLayers(defaultLayers)
+    setSelectedFacility(null)
+    setFacilityPopoverPosition(null)
     const { Marker3DElement, AltitudeMode } = lib
     for (const station of BANNAN_CORRIDOR) {
       const marker = new Marker3DElement({
@@ -473,13 +545,81 @@ export default function App() {
       map.append(marker)
     }
 
+    void loadAccessibilityFacilities().then(bundle => {
+      const metroExits = metroFacilitiesNearRoute(bundle.metroExits, selectedRouteRef.current, 110)
+      const metroPoints = metroFacilitiesNearRoute(bundle.metroAccessPoints, selectedRouteRef.current, 90)
+      const curbRamps = curbRampsNearRoute(bundle.curbRamps, selectedRouteRef.current, 18)
+      const publicToilets = metroFacilitiesNearRoute(bundle.publicToilets, selectedRouteRef.current, 140, 100)
+      const audibleSignals = audibleSignalsNearRoute(bundle.audibleSignals, selectedRouteRef.current)
+      const facilities: AccessibilityFacility[] = [...metroExits, ...metroPoints, ...curbRamps, ...publicToilets, ...audibleSignals]
+
+      for (const facility of facilities) {
+        const isElevator = facility.kind === 'metro_access'
+        const isExit = facility.kind === 'metro_exit'
+        const isToilet = facility.kind === 'public_toilet'
+        const isAudibleSignal = facility.kind === 'audible_signal'
+        const badge = document.createElement('span')
+        badge.className = [
+          'facility-map-badge',
+          `facility-map-badge-${facility.kind}`,
+          (isExit || isToilet) && facility.accessible ? 'is-accessible' : '',
+        ].filter(Boolean).join(' ')
+        badge.textContent = isExit
+          ? facility.exit
+          : isElevator
+            ? '↕'
+            : isToilet
+              ? 'WC'
+              : isAudibleSignal
+                ? '聲'
+              : '♿'
+
+        // Google 3D 的 MarkerElement 可承載真正的 HTML/CSS，因此設施可維持
+        // 純圓形；倒水滴只留給車站與主要地標。
+        const marker = new lib.MarkerElement({
+          position: { lat: facility.lat, lng: facility.lng, altitude: isElevator ? 5 : isToilet ? 2.5 : isAudibleSignal ? 2 : 1.5 },
+          title: facility.name,
+        })
+        marker.append(badge)
+        marker.addEventListener('click', event => {
+          const body = map.closest('.app-body')
+          const bodyRect = body?.getBoundingClientRect()
+          const markerRect = marker.getBoundingClientRect()
+          if (bodyRect) {
+            const pointer = event as MouseEvent
+            const anchorX = markerRect.width
+              ? markerRect.left + markerRect.width / 2 - bodyRect.left
+              : pointer.clientX - bodyRect.left
+            const anchorY = markerRect.height
+              ? markerRect.top + markerRect.height / 2 - bodyRect.top
+              : pointer.clientY - bodyRect.top
+            const width = Math.min(320, bodyRect.width - 24)
+            const estimatedHeight = 230
+            const gap = 12
+            const left = anchorX + gap + width <= bodyRect.width - 12
+              ? anchorX + gap
+              : Math.max(12, anchorX - width - gap)
+            const top = anchorY + estimatedHeight <= bodyRect.height - 12
+              ? Math.max(12, anchorY - 18)
+              : Math.max(12, anchorY - estimatedHeight)
+            setFacilityPopoverPosition({ left, top, width })
+          }
+          setSelectedFacility(facility)
+        })
+        accessibilityMarkersRef.current[facility.kind].push(marker)
+        facilityByMarkerRef.current.set(marker, facility)
+        if (visibleFacilityLayersRef.current[facility.kind] && !tourTimelineRef.current) map.append(marker)
+      }
+      if (tourTimelineRef.current && tourPositionRef.current) {
+        syncTourFacilityMarkers(tourPositionRef.current, tourCurrentModeRef.current)
+      }
+    }).catch(error => console.warn('無障礙設施圖層無法載入', error))
+
     routeLinesRef.current.forEach(line => line.remove())
     routeLinesRef.current = selectedRouteRef.current
       ? drawRoute(map, lib, selectedRouteRef.current)
       : []
-    trafficLayerRef.current?.destroy()
-    trafficLayerRef.current = createTrafficLayer(map, lib, setSelectedTrafficVehicle)
-  }, [])
+  }, [syncTourFacilityMarkers])
 
   useEffect(() => {
     if (!trafficLayerRef.current) return
@@ -632,6 +772,12 @@ export default function App() {
   // 訊息
   const addMessage = (msg: Message) => setMessages(prev => [...prev, msg])
 
+  const claimCurrentRoutesAutoPlay = useCallback(() => {
+    if (autoNarratedRoutesRef.current === routes) return false
+    autoNarratedRoutesRef.current = routes
+    return true
+  }, [routes])
+
   // Agent 回覆處理（後端 API 或 mock 降級）
   const handleAgentResponse = useCallback((res: AgentResponse) => {
     if (res.detectedMode) setMode(res.detectedMode)
@@ -752,6 +898,14 @@ export default function App() {
           </div>
 
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
+            <label className="header-speech-toggle">
+              <input
+                type="checkbox"
+                checked={speechAutoPlay}
+                onChange={event => changeSpeechAutoPlay(event.currentTarget.checked)}
+              />
+              <span>自動朗讀</span>
+            </label>
             <label className="header-speech-setting">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
@@ -811,6 +965,7 @@ export default function App() {
                 messages={messages}
                 onAddMessage={addMessage}
                 onAgentResponse={handleAgentResponse}
+                speechAutoPlay={speechAutoPlay}
               />
             </div>
             <div style={{ position: 'relative', minWidth: 0, minHeight: 0, overflow: 'hidden' }}>
@@ -818,6 +973,8 @@ export default function App() {
                 routes={routes}
                 onSelectRoute={handleSelectRoute}
                 speechRate={speechRate}
+                speechAutoPlay={speechAutoPlay}
+                claimAutoPlay={claimCurrentRoutesAutoPlay}
               />
             </div>
           </div>
@@ -825,7 +982,7 @@ export default function App() {
 
         {/* ── 地圖階段：同學的原版 layout ── */}
         {phase === 'map' && (
-          <div className="app">
+          <div className={`app${tourStatus !== 'idle' ? ' is-route-touring' : ''}`}>
             <header className="app-header">
               <h1>Taipei Pulse</h1>
               <p className="app-tagline">無障礙大眾運輸 3D 導引 · 板南線示範走廊</p>
@@ -914,7 +1071,71 @@ export default function App() {
                     <span><i className="route-swatch route-swatch-mrt" />捷運</span>
                     <span><i className="route-swatch route-swatch-bus" />公車</span>
                   </div>
+                  <div className="facility-layer-toggles" aria-label="無障礙設施圖層">
+                    <button
+                      type="button"
+                      className={visibleFacilityLayers.metro_exit ? 'is-active' : undefined}
+                      onClick={() => toggleFacilityLayer('metro_exit')}
+                      aria-pressed={visibleFacilityLayers.metro_exit}
+                      title="顯示或隱藏捷運出口"
+                    ><span className="facility-toggle-exit" aria-hidden="true">出</span><b>出口</b></button>
+                    <button
+                      type="button"
+                      className={visibleFacilityLayers.metro_access ? 'is-active' : undefined}
+                      onClick={() => toggleFacilityLayer('metro_access')}
+                      aria-pressed={visibleFacilityLayers.metro_access}
+                      title="顯示或隱藏捷運電梯"
+                    ><span aria-hidden="true">↕</span><b>電梯</b></button>
+                    <button
+                      type="button"
+                      className={visibleFacilityLayers.curb_ramp ? 'is-active' : undefined}
+                      onClick={() => toggleFacilityLayer('curb_ramp')}
+                      aria-pressed={visibleFacilityLayers.curb_ramp}
+                      title="顯示或隱藏沿線坡道"
+                    ><span aria-hidden="true">♿</span><b>坡道</b></button>
+                    <button
+                      type="button"
+                      className={visibleFacilityLayers.public_toilet ? 'is-active' : undefined}
+                      onClick={() => toggleFacilityLayer('public_toilet')}
+                      aria-pressed={visibleFacilityLayers.public_toilet}
+                      title="顯示或隱藏沿線公廁"
+                    ><span className="facility-toggle-toilet" aria-hidden="true">WC</span><b>廁所</b></button>
+                    <button
+                      type="button"
+                      className={visibleFacilityLayers.audible_signal ? 'is-active' : undefined}
+                      onClick={() => toggleFacilityLayer('audible_signal')}
+                      aria-pressed={visibleFacilityLayers.audible_signal}
+                      title="顯示或隱藏沿線有聲號誌"
+                    ><span className="facility-toggle-audible" aria-hidden="true">聲</span><b>有聲</b></button>
+                  </div>
                 </div>
+              )}
+              {selectedFacility && (
+                <aside
+                  className="facility-popover"
+                  role="dialog"
+                  aria-label={`${selectedFacility.name}設施資訊`}
+                  style={facilityPopoverPosition ?? undefined}
+                >
+                  <button type="button" className="facility-popover-close" onClick={() => {
+                    setSelectedFacility(null)
+                    setFacilityPopoverPosition(null)
+                  }} aria-label="關閉設施資訊">×</button>
+                  <span>{selectedFacility.kind === 'metro_exit'
+                    ? '捷運出口'
+                    : selectedFacility.kind === 'metro_access'
+                      ? '捷運無障礙設施'
+                      : selectedFacility.kind === 'public_toilet'
+                        ? selectedFacility.accessible ? '無障礙廁所' : '一般公廁'
+                        : selectedFacility.kind === 'audible_signal'
+                          ? '視障友善設施'
+                          : '路緣坡道'}</span>
+                  <strong>{selectedFacility.kind === 'metro_access'
+                    ? `${selectedFacility.stationName} ${selectedFacility.exit} 無障礙電梯`
+                    : selectedFacility.name}</strong>
+                  {facilityDescription(selectedFacility).map(line => <p key={line}>{line}</p>)}
+                  <small>來源：臺北市政府開放資料</small>
+                </aside>
               )}
               {selectedRoute && (
                 <div className={`route-tour-hud route-tour-mode-${tourMode}${tourStatus === 'idle' ? ' is-idle' : ''}${tourStatus === 'navigation-ready' ? ' is-navigation-ready' : ''}`}>

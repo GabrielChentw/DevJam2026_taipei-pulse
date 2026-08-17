@@ -51,6 +51,8 @@ _SYSTEM_INSTRUCTION = """\
 - 若使用者問到另一種障礙類型會如何，主動呼叫 compare_routes_across_profiles，
   引用其中的 divergence 說明兩者為什麼不同。
 - 用簡短、口語、繁體中文回答，不要輸出程式碼或 JSON。
+- 不要向使用者顯示 profile 的內部數值門檻，例如「可接受坡度上限約 12%」；
+  只需說明路線是否適合及實際需要注意的路況。
 """
 
 # gemini-2.5-flash 已對新使用者下架（2026/08 確認，Google 建議改用 Interactions API

@@ -13,7 +13,8 @@ from typing import Any
 
 from ..data_sources.tdx_bus import TDXBusShapeGeometry
 from ..models import AnnotatedLeg, Confidence, Feature, GeometryPrecision, LatLngPoint
-from .routes_geometry import DrivingRouteGeometry, WalkingRouteGeometry
+from .accessibility_facilities import AccessibilityFacilityIndex, load_accessibility_index
+from .routes_geometry import WalkingRouteGeometry
 
 # 車站設施中，會被複製到路段特徵上的欄位。
 _STATION_FEATURE_KEYS = (
@@ -65,15 +66,13 @@ class Annotator:
         self,
         corridor: dict[str, Any],
         walking_geometry: WalkingRouteGeometry | None = None,
-        bus_geometry: TDXBusShapeGeometry | None = None,
-        driving_geometry: DrivingRouteGeometry | None = None,
+        accessibility_index: AccessibilityFacilityIndex | None = None,
     ) -> None:
         self._stations = {s["id"]: s for s in corridor.get("stations", [])}
         self._bus_routes = {r["id"]: r for r in corridor.get("bus_routes", [])}
         self._landmarks = corridor.get("landmarks", {})
         self._walking_geometry = walking_geometry or WalkingRouteGeometry()
-        self._bus_geometry = bus_geometry or TDXBusShapeGeometry()
-        self._driving_geometry = driving_geometry or DrivingRouteGeometry()
+        self._accessibility_index = accessibility_index or load_accessibility_index()
 
     # ---------- 幾何 ----------
 
@@ -107,7 +106,7 @@ class Annotator:
             self._waypoint_points(leg)
             for candidate in candidates
             for leg in candidate.get("legs", [])
-            if leg.get("mode") == "walk"
+            if leg.get("mode") == "walk" and leg.get("road_snapping", True)
         ]
         self._walking_geometry.prefetch(paths)
 
@@ -148,7 +147,7 @@ class Annotator:
         if not resolved:
             return [], GeometryPrecision.MISSING
 
-        if leg.get("mode") == "walk":
+        if leg.get("mode") == "walk" and leg.get("road_snapping", True):
             routed = self._walking_geometry.route(resolved)
             if routed:
                 return routed, GeometryPrecision.ROAD_SNAPPED
@@ -205,6 +204,14 @@ class Annotator:
             leg_for_path = {**leg, "waypoints": [leg.get("from_station"), leg.get("to_station")]}
 
         path, precision = self._resolve_path(leg_for_path)
+
+        if mode == "walk" and path:
+            features.update(
+                self._accessibility_index.annotate_walk(
+                    path,
+                    float(features["street_crossings"].value),
+                )
+            )
 
         return AnnotatedLeg(
             index=index,
@@ -335,6 +342,43 @@ class Annotator:
             "transfers": _certain(float(sum(1 for l in legs if bool(l.features.get("is_transfer", Feature()).value)))),
             "vehicle_boardings": _certain(float(len(transit_legs))),
         }
+
+        ramp_deficits = [
+            l.features["curb_ramp_deficit"]
+            for l in legs
+            if "curb_ramp_deficit" in l.features
+            and float(l.features.get("street_crossings", Feature(value=0)).value or 0) > 0
+        ]
+        route["curb_ramp_deficit"] = (
+            Feature(
+                value=max(float(f.value) for f in ramp_deficits),
+                confidence=Confidence.ESTIMATED,
+                source=ramp_deficits[0].source,
+                detail="取各步行段中路緣坡道證據最不足的一段",
+            )
+            if ramp_deficits
+            else Feature(value=None, confidence=Confidence.UNKNOWN)
+        )
+
+        route["audible_signal_count"] = _certain(
+            sum(leg_value(l, "audible_signal_count") for l in legs)
+        )
+        audible_deficits = [
+            l.features["audible_signal_deficit"]
+            for l in legs
+            if "audible_signal_deficit" in l.features
+            and float(l.features.get("street_crossings", Feature(value=0)).value or 0) > 0
+        ]
+        route["audible_signal_deficit"] = (
+            Feature(
+                value=max(float(f.value) for f in audible_deficits),
+                confidence=Confidence.ESTIMATED,
+                source=audible_deficits[0].source,
+                detail="取各步行段中有聲號誌證據最不足的一段",
+            )
+            if audible_deficits
+            else Feature(value=None, confidence=Confidence.UNKNOWN)
+        )
 
         slopes = [leg_value(l, "max_slope_percent", -1.0) for l in legs]
         known_slopes = [s for s in slopes if s >= 0]

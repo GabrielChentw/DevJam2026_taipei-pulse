@@ -3,7 +3,7 @@ import type { AccessibilityMode, Message } from '../types'
 import { sendChatMessage } from '../lib/api'
 import { getMockAgentResponse, planToRoutes, sanitizeUserFacingScore, INITIAL_QUICK_ACTIONS } from '../mockData'
 import type { AgentResponse } from '../mockData'
-import { speak } from '../lib/speech'
+import { getAgentSpeechSummary, speak } from '../lib/speech'
 
 // ── TTS ───────────────────────────────────────────────────────────────────────
 
@@ -14,6 +14,7 @@ interface Props {
   messages: Message[]
   onAddMessage: (msg: Message) => void
   onAgentResponse: (res: AgentResponse) => void
+  speechAutoPlay: boolean
 }
 
 function ChatAvatar({ role }: { role: Message['role'] }) {
@@ -35,6 +36,39 @@ function ChatAvatar({ role }: { role: Message['role'] }) {
   )
 }
 
+function renderInlineMarkdown(text: string) {
+  return text.split(/(\*\*[^*]+\*\*)/).map((part, index) =>
+    part.startsWith('**') && part.endsWith('**')
+      ? <strong key={index}>{part.slice(2, -2)}</strong>
+      : <span key={index}>{part.replace(/\*/g, '')}</span>
+  )
+}
+
+function renderAgentMessage(content: string) {
+  const text = sanitizeUserFacingScore(content)
+  return text.split('\n').map((line, index) => {
+    const trimmed = line.trim()
+    if (!trimmed) return <span key={index} className="chat-markdown-spacer" />
+    if (/^-{3,}$/.test(trimmed)) return <hr key={index} className="chat-markdown-divider" />
+
+    const heading = trimmed.match(/^#{1,6}\s+(.+)$/)
+    if (heading) {
+      return <div key={index} className="chat-markdown-heading">{renderInlineMarkdown(heading[1])}</div>
+    }
+
+    const bullet = trimmed.match(/^[*-]\s+(.+)$/)
+    if (bullet) {
+      return (
+        <div key={index} className="chat-markdown-bullet">
+          <span aria-hidden="true">•</span><span>{renderInlineMarkdown(bullet[1])}</span>
+        </div>
+      )
+    }
+
+    return <div key={index} className="chat-markdown-line">{renderInlineMarkdown(trimmed)}</div>
+  })
+}
+
 // ── SpeechRecognition 瀏覽器相容 ─────────────────────────────────────────────
 
 const SpeechRecognitionAPI =
@@ -45,7 +79,7 @@ const SpeechRecognitionAPI =
 
 // ── Component ────────────────────────────────────────────────────────────────
 
-export default function ChatPanel({ mode, messages, onAddMessage, onAgentResponse }: Props) {
+export default function ChatPanel({ mode, messages, onAddMessage, onAgentResponse, speechAutoPlay }: Props) {
   const [input, setInput]         = useState('')
   const [typing, setTyping]       = useState(false)
   const [listening, setListening] = useState(false)
@@ -88,7 +122,6 @@ export default function ChatPanel({ mode, messages, onAddMessage, onAgentRespons
         timestamp: new Date(),
       }
       onAddMessage(agentMsg)
-      if (mode === 'visual') speak(userFacingReply)
 
       const agentRes: AgentResponse = {
         content: userFacingReply,
@@ -104,6 +137,10 @@ export default function ChatPanel({ mode, messages, onAddMessage, onAgentRespons
         agentRes.profileDetail = chatRes.plan.profile_label
       }
 
+      if (speechAutoPlay && !agentRes.routesReady) {
+        speak(getAgentSpeechSummary(userFacingReply))
+      }
+
       onAgentResponse(agentRes)
     } catch {
       // ── 後端不在線 → Mock 降級 ──────────────────────────────────────────────
@@ -117,11 +154,13 @@ export default function ChatPanel({ mode, messages, onAddMessage, onAgentRespons
           timestamp: new Date(),
         }
         onAddMessage(agentMsg)
-        if (mode === 'visual') speak(res.content)
+        if (speechAutoPlay && !res.routesReady) {
+          speak(getAgentSpeechSummary(res.content))
+        }
         onAgentResponse(res)
       }, 600 + Math.random() * 500)
     }
-  }, [messages, mode, typing, onAddMessage, onAgentResponse])
+  }, [messages, mode, typing, onAddMessage, onAgentResponse, speechAutoPlay])
 
   // ── 語音輸入 ──────────────────────────────────────────────────────────────
 
@@ -235,28 +274,25 @@ export default function ChatPanel({ mode, messages, onAddMessage, onAgentRespons
                 border: msg.role === 'agent' ? '1.5px solid var(--border)' : 'none',
               }}>
                 {msg.role === 'agent'
-                  ? sanitizeUserFacingScore(msg.content).split(/(\*\*[^*]+\*\*)/).map((part, i) =>
-                      part.startsWith('**') && part.endsWith('**')
-                        ? <strong key={i}>{part.slice(2, -2)}</strong>
-                        : part
-                    )
+                  ? renderAgentMessage(msg.content)
                   : msg.content
                 }
               </div>
               {msg.role === 'agent' && (
                 <button
-                  onClick={() => speak(msg.content.replace(/\*\*/g, ''))}
-                  title="朗讀此訊息"
+                  onClick={() => speak(getAgentSpeechSummary(msg.content))}
+                  title="朗讀訊息重點"
+                  aria-label="朗讀訊息重點"
                   style={{
-                    position: 'absolute', bottom: -8, right: 4,
-                    width: 24, height: 24, borderRadius: 6,
+                    position: 'absolute', bottom: -12, right: 5,
+                    width: 34, height: 34, borderRadius: 9,
                     background: 'var(--bg-card)', border: '1px solid var(--border)',
                     color: 'var(--text-muted)', cursor: 'pointer',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     boxShadow: 'var(--shadow-xs)',
                   }}
                 >
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
                     <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
                     <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>

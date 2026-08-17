@@ -165,6 +165,7 @@ import type { ChatResponse, PlanResponse, EvaluatedRoute } from './types/api'
  */
 export function sanitizeUserFacingScore(text: string): string {
   return text
+    .replace(/[（(][^（）()\n]*可接受[^（）()\n]*(?:坡度[^（）()\n]*\d+(?:\.\d+)?\s*%|\d+(?:\.\d+)?\s*%[^（）()\n]*坡度)[^（）()\n]*[）)]/g, '')
     .replace(/(?:總)?負擔分數(?:為|是|：|:)?\s*-?\d+(?:\.\d+)?(?:\s*分)?[，,；;。]?\s*/g, '')
     .replace(/（\s*-?\d+(?:\.\d+)?\s*[×x*]\s*-?\d+(?:\.\d+)?\s*=\s*-?\d+(?:\.\d+)?\s*）/g, '')
     .replace(/主要來自/g, '推薦時已綜合考量')
@@ -369,6 +370,7 @@ export const QUICK_ACTIONS: Record<AccessibilityMode, string[]> = {
 
 // 初始快速動作（無模式時顯示）
 export const INITIAL_QUICK_ACTIONS = [
+  '台北車站到市政府',
   '我使用電動輪椅',
   '我有視力障礙',
   '高齡者',

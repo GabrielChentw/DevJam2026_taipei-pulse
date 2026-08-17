@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { PlannedRoute } from '../types'
 import { sanitizeUserFacingScore } from '../mockData'
-import { speak, stopSpeaking } from '../lib/speech'
+import { getRouteSpeechSummary, pauseSpeaking, resumeSpeaking, speak, stopSpeaking } from '../lib/speech'
 
 const STEP_META = {
   walk: {
@@ -11,9 +11,9 @@ const STEP_META = {
       </svg>
     ),
     label: '步行',
-    color: '#3A6B4F',
-    bg: '#EBF2ED',
-    dot: '#3A6B4F',
+    color: 'var(--walk-color)',
+    bg: 'var(--walk-bg)',
+    dot: 'var(--walk-color)',
   },
   mrt: {
     icon: (
@@ -24,9 +24,9 @@ const STEP_META = {
       </svg>
     ),
     label: '捷運',
-    color: '#1B5FAA',
-    bg: '#E8F0FB',
-    dot: '#1B5FAA',
+    color: 'var(--mrt-color)',
+    bg: 'var(--mrt-bg)',
+    dot: 'var(--mrt-color)',
   },
   bus: {
     icon: (
@@ -37,9 +37,9 @@ const STEP_META = {
       </svg>
     ),
     label: '公車',
-    color: '#8B5E3C',
-    bg: '#F5EFE8',
-    dot: '#8B5E3C',
+    color: 'var(--bus-color)',
+    bg: 'var(--bus-bg)',
+    dot: 'var(--bus-color)',
   },
 }
 
@@ -56,33 +56,61 @@ interface Props {
   routes: PlannedRoute[]
   onSelectRoute: (route: PlannedRoute) => void
   speechRate: number
+  speechAutoPlay: boolean
+  claimAutoPlay: () => boolean
 }
 
-export default function RoutePanel({ routes, onSelectRoute, speechRate }: Props) {
+export default function RoutePanel({ routes, onSelectRoute, speechRate, speechAutoPlay, claimAutoPlay }: Props) {
   const recommended = routes.filter(r => !r.excluded)
   const excluded    = routes.filter(r => r.excluded)
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null)
   const [speakingRouteId, setSpeakingRouteId] = useState<string | null>(null)
+  const [speechPaused, setSpeechPaused] = useState(false)
 
   useEffect(() => () => stopSpeaking(), [])
 
   useEffect(() => {
     stopSpeaking()
     setSpeakingRouteId(null)
-  }, [speechRate])
+    setSpeechPaused(false)
+
+    const recommendedRoute = routes.find(route => !route.excluded)
+    if (!speechAutoPlay || !recommendedRoute || !claimAutoPlay()) return
+
+    setSpeakingRouteId(recommendedRoute.id)
+    const started = speak(
+      getRouteSpeechSummary(recommendedRoute),
+      speechRate,
+      () => {
+        setSpeakingRouteId(current => current === recommendedRoute.id ? null : current)
+        setSpeechPaused(false)
+      },
+    )
+    if (!started) setSpeakingRouteId(null)
+  }, [routes, speechAutoPlay, speechRate, claimAutoPlay])
 
   const toggleRouteSpeech = (route: PlannedRoute) => {
     if (speakingRouteId === route.id) {
-      stopSpeaking()
-      setSpeakingRouteId(null)
+      if (speechPaused) {
+        resumeSpeaking()
+        setSpeechPaused(false)
+      } else {
+        pauseSpeaking()
+        setSpeechPaused(true)
+      }
       return
     }
 
+    stopSpeaking()
+    setSpeechPaused(false)
     setSpeakingRouteId(route.id)
     const started = speak(
       getRouteSpeechSummary(route),
       speechRate,
-      () => setSpeakingRouteId(current => current === route.id ? null : current),
+      () => {
+        setSpeakingRouteId(current => current === route.id ? null : current)
+        setSpeechPaused(false)
+      },
     )
     if (!started) setSpeakingRouteId(null)
   }
@@ -138,6 +166,7 @@ export default function RoutePanel({ routes, onSelectRoute, speechRate }: Props)
                     onShowDetails={() => setSelectedRouteId(current => current === route.id ? null : route.id)}
                     onSelect={() => onSelectRoute(route)}
                     speaking={speakingRouteId === route.id}
+                    speechPaused={speakingRouteId === route.id && speechPaused}
                     onSpeak={() => toggleRouteSpeech(route)}
                   />
                   {expanded && (
@@ -159,7 +188,7 @@ export default function RoutePanel({ routes, onSelectRoute, speechRate }: Props)
       {/* 不建議路線 */}
       {excluded.length > 0 && (
         <>
-          <Divider label="不建議使用" />
+          <Divider label="不建議選擇" />
           {excluded.map(route => (
             <ExcludedCard key={route.id} route={route} onSelect={() => onSelectRoute(route)} />
           ))}
@@ -202,16 +231,6 @@ function getRouteDisplayName(route: PlannedRoute) {
   return '步行路線'
 }
 
-function getRouteSpeechSummary(route: PlannedRoute) {
-  const steps = route.steps.map(step => {
-    const line = step.line ? `${step.line}，` : ''
-    return `${STEP_META[step.type].label}，${line}${step.duration}分鐘`
-  }).join('。')
-  const transfer = route.segments <= 1 ? '免轉乘' : `轉乘${route.segments - 1}次`
-  const accessible = route.fullyAccessible ? '，全程無障礙' : ''
-  return `${route.label}，${getRouteDisplayName(route)}，共${route.totalMinutes}分鐘。${steps}。${transfer}${accessible}。`
-}
-
 function SpeakerIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -222,10 +241,11 @@ function SpeakerIcon() {
   )
 }
 
-function StopIcon() {
+function PauseIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <rect x="5" y="5" width="14" height="14" rx="2" />
+      <rect x="5" y="4" width="5" height="16" rx="1" />
+      <rect x="14" y="4" width="5" height="16" rx="1" />
     </svg>
   )
 }
@@ -239,6 +259,7 @@ function RouteSummary({
   onSelect,
   onSpeak,
   speaking,
+  speechPaused,
 }: {
   route: PlannedRoute
   recommended: boolean
@@ -247,6 +268,7 @@ function RouteSummary({
   onSelect: () => void
   onSpeak: () => void
   speaking: boolean
+  speechPaused: boolean
 }) {
   const transferLabel = route.segments <= 1 ? '免轉乘' : `${route.segments - 1} 次轉乘`
   const displayName = getRouteDisplayName(route)
@@ -303,11 +325,11 @@ function RouteSummary({
           type="button"
           className={`route-summary-speak${speaking ? ' is-speaking' : ''}`}
           onClick={onSpeak}
-          aria-label={speaking ? `停止朗讀${route.label}` : `朗讀${route.label}重點`}
+          aria-label={speechPaused ? `繼續朗讀${route.label}` : speaking ? `暫停朗讀${route.label}` : `朗讀${route.label}重點`}
           aria-pressed={speaking}
         >
-          {speaking ? <StopIcon /> : <SpeakerIcon />}
-          <span>{speaking ? '停止朗讀' : '朗讀'}</span>
+          {speaking && !speechPaused ? <PauseIcon /> : <SpeakerIcon />}
+          <span>{speechPaused ? '繼續' : speaking ? '暫停' : '朗讀'}</span>
         </button>
         <button type="button" className="route-summary-map" onClick={onSelect} aria-label={`在 3D 地圖上查看${route.label}`}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -450,7 +472,7 @@ function RouteCard({ route, onSelect, embedded = false }: { route: PlannedRoute;
                 {step.hasElevator && (
                   <div style={{
                     display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 4,
-                    background: '#EBF2ED', color: '#3A6B4F',
+                    background: 'var(--walk-bg)', color: 'var(--walk-color)',
                     fontSize: 10.5, fontWeight: 600, padding: '2px 7px', borderRadius: 5,
                   }}>
                     {ELEVATOR_ICON}
@@ -506,28 +528,28 @@ function RouteCard({ route, onSelect, embedded = false }: { route: PlannedRoute;
 function ExcludedCard({ route, onSelect }: { route: PlannedRoute; onSelect: () => void }) {
   return (
     <div style={{
-      background: 'var(--bg-card)', border: '1.5px solid rgba(160,59,59,0.2)',
-      borderRadius: 16, overflow: 'hidden', opacity: 0.72,
+      background: 'var(--bg-card)', border: '1.5px solid var(--danger-border)',
+      borderRadius: 16, overflow: 'hidden',
     }}>
       <div style={{
         padding: '12px 16px',
-        borderBottom: '1px solid rgba(160,59,59,0.15)',
+        borderBottom: '1px solid var(--danger-border)',
         display: 'flex', alignItems: 'center', gap: 8,
-        background: 'rgba(160,59,59,0.04)',
+        background: 'var(--danger-bg)',
       }}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#A03B3B" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
           <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
         </svg>
-        <span style={{ fontSize: 13, fontWeight: 600, color: '#A03B3B' }}>{route.label}</span>
-        <span style={{ marginLeft: 'auto', fontSize: 12, color: '#A03B3B' }}>{route.totalMinutes} 分鐘</span>
+        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--danger)' }}>{route.label}</span>
+        <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--danger)' }}>{route.totalMinutes} 分鐘</span>
         <button
           type="button"
           onClick={onSelect}
           aria-label={`仍在 3D 地圖上查看${route.label}`}
           style={{
             height: 26, padding: '0 9px', borderRadius: 7,
-            background: 'transparent', border: '1px solid rgba(160,59,59,0.35)',
-            color: '#A03B3B', cursor: 'pointer', fontFamily: 'inherit',
+            background: 'transparent', border: '1px solid var(--danger-border)',
+            color: 'var(--danger)', cursor: 'pointer', fontFamily: 'inherit',
             display: 'inline-flex', alignItems: 'center', gap: 4,
             fontSize: 11, fontWeight: 600, flexShrink: 0,
           }}
@@ -552,7 +574,7 @@ function ExcludedCard({ route, onSelect }: { route: PlannedRoute; onSelect: () =
                 opacity: step.accessible ? 1 : 0.45,
                 textDecoration: step.accessible ? 'none' : 'line-through',
               }}>
-                {meta.icon}{step.duration}分
+                {meta.icon}<span>{meta.label}</span><span>{step.duration} 分</span>
               </span>
               {i < route.steps.length - 1 && (
                 <span style={{ color: 'var(--text-muted)', fontSize: 10 }}>→</span>
@@ -566,8 +588,8 @@ function ExcludedCard({ route, onSelect }: { route: PlannedRoute; onSelect: () =
         <div style={{
           margin: '0 16px 14px',
           padding: '10px 12px', borderRadius: 10,
-          background: 'rgba(160,59,59,0.06)', border: '1px solid rgba(160,59,59,0.15)',
-          fontSize: 12, color: '#A03B3B', lineHeight: 1.6,
+          background: 'var(--danger-bg)', border: '1px solid var(--danger-border)',
+          fontSize: 12, color: 'var(--danger)', lineHeight: 1.6,
         }}>
           <span style={{ fontWeight: 700 }}>不建議原因：</span>{route.excludeReason}
         </div>

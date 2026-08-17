@@ -6,6 +6,8 @@ export interface Maps3dLibrary {
   Map3DElement: new (options: Record<string, unknown>) => Map3DElementLike;
   Marker3DElement: new (options: Record<string, unknown>) => Marker3DElementLike;
   Marker3DInteractiveElement: new (options: Record<string, unknown>) => Marker3DElementLike;
+  MarkerElement: new (options: Record<string, unknown>) => Marker3DElementLike;
+  PinElement: new (options: Record<string, unknown>) => HTMLElement;
   Polyline3DElement: new (options: Record<string, unknown>) => HTMLElement;
   Model3DElement: new (options: Record<string, unknown>) => Model3DElementLike;
   Model3DInteractiveElement: new (options: Record<string, unknown>) => Model3DElementLike;
@@ -261,9 +263,15 @@ export function loadMaps3d(): Promise<Maps3dLibrary> {
       if (!importLibrary) {
         throw new Error('google.maps.importLibrary 不存在，動態載入機制沒有就緒');
       }
-      return importLibrary('maps3d');
+      return Promise.all([
+        importLibrary('maps3d'),
+        importLibrary('marker'),
+      ]);
     })
-    .then((lib) => lib as Maps3dLibrary)
+    .then(([maps3d, marker]) => ({
+      ...(maps3d as Record<string, unknown>),
+      PinElement: (marker as { PinElement: Maps3dLibrary['PinElement'] }).PinElement,
+    }) as unknown as Maps3dLibrary)
     .catch((error: unknown) => {
       // 讓下一次呼叫可以重試，而不是永久卡在失敗的 promise 上。
       libraryPromise = null;

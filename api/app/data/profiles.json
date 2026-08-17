@@ -61,6 +61,7 @@
         "station_complexity": 0.5,
         "street_crossings": 1.0,
         "uncontrolled_crossings": 3.0,
+        "curb_ramp_deficit": 8.0,
         "missing_accessible_restroom": 2.0
       },
 
@@ -126,7 +127,8 @@
         "max_slope_percent": 0.2,
         "platform_gap_cm": 1.5,
         "missing_tactile_paving": 8.0,
-        "missing_platform_screen_door": 3.0
+        "missing_platform_screen_door": 3.0,
+        "audible_signal_deficit": 10.0
       },
 
       "unknown_policy": {
@@ -173,6 +175,7 @@
         "max_slope_percent": 2.0,
         "station_complexity": 2.0,
         "street_crossings": 1.5,
+        "curb_ramp_deficit": 2.0,
         "missing_accessible_restroom": 1.0
       },
 
