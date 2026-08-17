@@ -1,4 +1,4 @@
-"""Google Routes API walking geometry, with a quiet offline fallback.
+"""Google Routes API road geometry, with a quiet offline fallback.
 
 The accessibility scoring engine remains deterministic and offline-first. This
 module only enriches drawable geometry: if the API key is absent or a request
@@ -33,8 +33,9 @@ def _lat_lng(point: tuple[float, float]) -> dict[str, object]:
 
 
 @lru_cache(maxsize=128)
-def _fetch_walking_path(
+def _fetch_route_path(
     api_key: str,
+    travel_mode: str,
     points: tuple[tuple[float, float], ...],
 ) -> tuple[tuple[float, float], ...] | None:
     """Return (lat, lng) points. Failures are cached to avoid retry storms."""
@@ -44,7 +45,7 @@ def _fetch_walking_path(
     payload: dict[str, object] = {
         "origin": _lat_lng(points[0]),
         "destination": _lat_lng(points[-1]),
-        "travelMode": "WALK",
+        "travelMode": travel_mode,
         "polylineQuality": "HIGH_QUALITY",
         "polylineEncoding": "GEO_JSON_LINESTRING",
         "languageCode": "zh-TW",
@@ -74,16 +75,18 @@ def _fetch_walking_path(
     except (HTTPError, URLError, TimeoutError, KeyError, IndexError, TypeError, ValueError) as error:
         # Do not include the request headers here: they contain the API key.
         logger.warning(
-            "walking route unavailable; using waypoint fallback: %s",
+            "%s route unavailable; using waypoint fallback: %s",
+            travel_mode.lower(),
             error,
         )
         return None
 
 
-class WalkingRouteGeometry:
+class GoogleRouteGeometry:
     """Small synchronous client shared by all legs in one planning request."""
 
-    def __init__(self, api_key: str | None = None) -> None:
+    def __init__(self, travel_mode: str, api_key: str | None = None) -> None:
+        self._travel_mode = travel_mode
         # In local development .env is often edited while Uvicorn is already
         # running. Read the current file value here so a newly pasted key takes
         # effect without relying on the process environment captured at startup.
@@ -105,13 +108,13 @@ class WalkingRouteGeometry:
         if not self.enabled or len(points) < 2:
             return None
         key = tuple((point.lat, point.lng) for point in points)
-        path = _fetch_walking_path(self._api_key, key)
+        path = _fetch_route_path(self._api_key, self._travel_mode, key)
         if path is None:
             return None
         return [LatLngPoint(lat=lat, lng=lng) for lat, lng in path]
 
     def prefetch(self, paths: Iterable[list[LatLngPoint]]) -> None:
-        """Warm distinct walking routes concurrently to keep first response fast."""
+        """Warm distinct routes concurrently to keep first response fast."""
         if not self.enabled:
             return
         unique: dict[tuple[tuple[float, float], ...], list[LatLngPoint]] = {}
@@ -121,3 +124,15 @@ class WalkingRouteGeometry:
                 unique.setdefault(key, path)
         with ThreadPoolExecutor(max_workers=min(6, len(unique) or 1)) as pool:
             list(pool.map(self.route, unique.values()))
+
+
+class WalkingRouteGeometry(GoogleRouteGeometry):
+    def __init__(self, api_key: str | None = None) -> None:
+        super().__init__("WALK", api_key)
+
+
+class DrivingRouteGeometry(GoogleRouteGeometry):
+    """Road-snapped fallback when a real transit shape is unavailable."""
+
+    def __init__(self, api_key: str | None = None) -> None:
+        super().__init__("DRIVE", api_key)

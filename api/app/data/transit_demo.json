@@ -1,0 +1,42 @@
+{
+  "meta": {
+    "purpose": "TDX 不提供低地板／輪椅斜坡板車輛屬性時的透明 MVP 回退。",
+    "honesty": "車牌、ETA 與位置可能來自 TDX；low_floor 與 has_ramp 一律標記 demo_simulation，不能宣稱為官方即時資料。"
+  },
+  "routes": [
+    {
+      "route_name": "信義幹線",
+      "route_uid": "TPE15708",
+      "direction": 1,
+      "boarding_stop_uid": "TPE170429",
+      "boarding_stop_name": "臺北車站（青島）",
+      "boarding_position": { "lat": 25.04484411, "lng": 121.517704 },
+      "alighting_stop_uid": "TPE29460",
+      "alighting_position": { "lat": 25.032802, "lng": 121.564536 },
+      "corridor_trip_seconds": 1560,
+      "demo_vehicle": {
+        "plate_number": "DEMO-LF-15708",
+        "eta_seconds": 240,
+        "is_low_floor": true,
+        "has_ramp": true
+      }
+    },
+    {
+      "route_name": "忠孝幹線",
+      "route_uid": "TPE10417",
+      "direction": 0,
+      "boarding_stop_uid": "TPE36064",
+      "boarding_stop_name": "捷運忠孝敦化站",
+      "boarding_position": { "lat": 25.041391012662, "lng": 121.55037495586 },
+      "alighting_stop_uid": "TPE36069",
+      "alighting_position": { "lat": 25.04100991, "lng": 121.5668354 },
+      "corridor_trip_seconds": 660,
+      "demo_vehicle": {
+        "plate_number": "DEMO-LF-10417",
+        "eta_seconds": 180,
+        "is_low_floor": true,
+        "has_ramp": true
+      }
+    }
+  ]
+}

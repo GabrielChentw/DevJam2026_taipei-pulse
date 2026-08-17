@@ -2,7 +2,7 @@
   "meta": {
     "scope": "捷運板南線 台北車站 ↔ 市政府 走廊及沿線公車",
     "curated_at": "2026-08-17",
-    "method": "人工建置。自動擷取（TDX / metro.taipei / data.taipei）為後續工作。",
+    "method": "走廊設施以人工種子與臺北開放資料混合建置；公車站點與營運 Shape 由 TDX 即時取得並保留離線回退。",
     "honesty_note": "每筆設施資料都帶 confidence 欄位。null 代表『我們沒有這筆資料』，不是『沒有這項設施』 —— 兩者對使用者的意義完全不同，引擎與 agent 都必須據實呈現。"
   },
 
@@ -14,19 +14,19 @@
   },
 
   "landmarks": {
-    "_note": "供 candidates.json 的 leg 畫出示意路線用。這些是人工估計的座標，不是實測站牌位置，前端與 agent 都應視為 approximate。真正的站牌座標應改用 TDX 的公車站點資料。",
+    "_note": "步行入口仍含人工估計座標；公車上下車點已改用 TDX StopOfRoute 座標。外部 Shape 不可用時，這些端點仍可作為離線回退。",
 
     "taipei_station_m7": { "name": "台北車站 M7 出口", "position": { "lat": 25.0464, "lng": 121.5177 } },
-    "taipei_station_sinyi_stop": { "name": "信義幹線 台北車站站牌", "position": { "lat": 25.0458, "lng": 121.5183 } },
+    "taipei_station_sinyi_stop": { "name": "信義幹線 臺北車站（青島）站牌", "position": { "lat": 25.04484411, "lng": 121.517704 } },
 
     "city_hall_exit3": { "name": "市政府站 3 號出口", "position": { "lat": 25.0407, "lng": 121.5683 } },
     "city_hall_exit1": { "name": "市政府站 1 號出口", "position": { "lat": 25.0412, "lng": 121.5674 } },
     "city_hall_building": { "name": "台北市政府大樓", "position": { "lat": 25.0375, "lng": 121.5637 } },
-    "sinyi_sec5_stop": { "name": "信義幹線 市府轉運站", "position": { "lat": 25.0372, "lng": 121.5647 } },
+    "sinyi_sec5_stop": { "name": "信義幹線 捷運台北101／世貿站（信義）", "position": { "lat": 25.032802, "lng": 121.564536 } },
 
     "zhongxiao_dunhua_stop": { "name": "忠孝敦化站 3 號出口", "position": { "lat": 25.0416, "lng": 121.5497 } },
-    "bus672_zhongxiao_stop": { "name": "忠孝敦化 672 站牌", "position": { "lat": 25.0413, "lng": 121.5503 } },
-    "bus672_near_city_hall_stop": { "name": "672 市府站牌", "position": { "lat": 25.0388, "lng": 121.5645 } },
+    "zhongxiao_trunk_dunhua_stop": { "name": "忠孝幹線 捷運忠孝敦化站", "position": { "lat": 25.041391012662, "lng": 121.55037495586 } },
+    "zhongxiao_trunk_city_hall_stop": { "name": "忠孝幹線 捷運市政府站", "position": { "lat": 25.04100991, "lng": 121.5668354 } },
 
     "sys_memorial_exit": { "name": "國父紀念館站出口", "position": { "lat": 25.0413, "lng": 121.5576 } }
   },
@@ -187,7 +187,7 @@
     {
       "id": "SINYI_TRUNK",
       "name": "信義幹線",
-      "operator": "多家聯營",
+      "operator": "首都客運",
       "facilities": {
         "low_floor_ratio": { "value": null, "confidence": "unknown", "note": "TDX 車輛資料的低地板欄位覆蓋率尚未查證。這是本專案最關鍵的資料缺口。" },
         "has_audio_announcement": { "value": true, "confidence": "regulatory" },
@@ -197,9 +197,9 @@
       "note": "沿信義路行駛，班次密集。"
     },
     {
-      "id": "BUS_672",
-      "name": "672",
-      "operator": "大都會客運",
+      "id": "ZHONGXIAO_TRUNK",
+      "name": "忠孝幹線",
+      "operator": "三重客運",
       "facilities": {
         "low_floor_ratio": { "value": null, "confidence": "unknown" },
         "has_audio_announcement": { "value": true, "confidence": "regulatory" },

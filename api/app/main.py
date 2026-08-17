@@ -2,9 +2,10 @@
 
 無障礙路線評分引擎。同一組候選路線，套用不同的 profile 會得到不同的可行性判定與排序。
 
-安全性說明：這個服務目前**沒有任何身分驗證**。它只讀取 repo 內的靜態種子資料，
-不含個人資料、不寫入任何儲存，且僅供本機開發與 demo 使用。若要部署到公開網址，
-必須先加上驗證與速率限制 —— 屆時它會開始接收使用者的無障礙需求，那是敏感個人資料。
+安全性說明：這個服務目前**沒有任何身分驗證**。偏好端點只接受使用者主動同意的
+匿名障礙模式、簡短輔具說明、語速與主題，不接受定位、行程或對話內容。它仍僅供本機
+開發與受控 demo；公開部署前必須加上 Firebase Auth／Identity Platform 與速率限制，
+因為無障礙偏好本身仍可能是敏感個人資料。
 """
 
 from __future__ import annotations
@@ -15,8 +16,22 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .agent import chat as agent_chat
 from .data_sources.accessibility import load_accessibility_snapshot
+from .data_sources.tdx_arrivals import load_transit_arrivals
+from .data_sources.tdx_traffic_scene import load_traffic_scene
+from .data_sources.user_preferences import load_user_preferences, save_user_preferences
 from .engine import plan as planner
-from .models import ChatRequest, ChatResponse, CompareResponse, PlanRequest, PlanResponse, ProfileSummary
+from .models import (
+    ChatRequest,
+    ChatResponse,
+    CompareResponse,
+    PlanRequest,
+    PlanResponse,
+    ProfileSummary,
+    TransitArrivalSnapshot,
+    TrafficSceneSnapshot,
+    UserPreferences,
+    UserPreferencesSnapshot,
+)
 
 # chat.py 在第一次呼叫時才延遲讀取 os.environ["GEMINI_API_KEY"]，
 # 所以這裡放在 import 之後也沒問題，只要在第一個 request 進來之前執行過即可。
@@ -36,7 +51,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origin_regex=r"http://(localhost|127\.0\.0\.1):\d+",
-    allow_methods=["GET", "POST"],
+    allow_methods=["GET", "POST", "PUT"],
     allow_headers=["*"],
 )
 
@@ -52,6 +67,24 @@ def get_profiles() -> list[ProfileSummary]:
     return planner.list_profiles()
 
 
+@app.get("/api/users/{user_id}/preferences", response_model=UserPreferencesSnapshot)
+def get_user_preferences(user_id: str) -> UserPreferencesSnapshot:
+    """Load explicitly saved anonymous display/accessibility preferences."""
+    try:
+        return UserPreferencesSnapshot.model_validate(load_user_preferences(user_id))
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+@app.put("/api/users/{user_id}/preferences", response_model=UserPreferencesSnapshot)
+def put_user_preferences(user_id: str, preferences: UserPreferences) -> UserPreferencesSnapshot:
+    """Persist opt-in preferences. Location and chat history are never accepted."""
+    try:
+        return UserPreferencesSnapshot.model_validate(save_user_preferences(user_id, preferences))
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+
 @app.get("/api/corridor")
 def get_corridor() -> dict:
     """走廊的無障礙種子資料，含每筆設施的 confidence。"""
@@ -62,6 +95,54 @@ def get_corridor() -> dict:
 def get_accessibility(refresh: bool = False) -> dict:
     """官方無障礙設施快照；來源失效時自動回退到 repo 內已驗證資料。"""
     return load_accessibility_snapshot(force_refresh=refresh)
+
+
+@app.get("/api/transit/arrivals", response_model=TransitArrivalSnapshot)
+def get_transit_arrivals(
+    route_name: str,
+    route_uid: str,
+    direction: int,
+    boarding_stop_uid: str,
+    refresh: bool = False,
+) -> TransitArrivalSnapshot:
+    """Next bus with separate provenance for timing, position and accessibility."""
+
+    try:
+        snapshot = load_transit_arrivals(
+            route_name,
+            route_uid,
+            direction,
+            boarding_stop_uid,
+            force_refresh=refresh,
+        )
+        return TransitArrivalSnapshot.model_validate(snapshot)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+@app.get("/api/transit/scene", response_model=TrafficSceneSnapshot)
+def get_traffic_scene(
+    target_mode: str | None = None,
+    target_route_name: str | None = None,
+    target_route_uid: str | None = None,
+    target_direction: int | None = None,
+    target_boarding_stop_uid: str | None = None,
+    refresh: bool = False,
+) -> TrafficSceneSnapshot:
+    """Timetable/live-data driven metro and bus objects for the 3D map."""
+
+    target = None
+    if target_mode and target_route_uid and target_direction is not None:
+        target = {
+            "mode": target_mode,
+            "route_name": target_route_name,
+            "route_uid": target_route_uid,
+            "direction": target_direction,
+            "boarding_stop_uid": target_boarding_stop_uid,
+        }
+    return TrafficSceneSnapshot.model_validate(
+        load_traffic_scene(target=target, force_refresh=refresh)
+    )
 
 
 @app.post("/api/plan", response_model=PlanResponse)

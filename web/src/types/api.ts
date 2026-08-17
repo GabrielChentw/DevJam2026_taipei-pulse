@@ -11,7 +11,7 @@
 
 export type Confidence = 'verified' | 'regulatory' | 'estimated' | 'unknown';
 
-export type GeometryPrecision = 'road_snapped' | 'approximate' | 'missing';
+export type GeometryPrecision = 'transit_shape' | 'road_snapped' | 'approximate' | 'missing';
 
 export interface LatLngPoint {
   lat: number;
@@ -43,12 +43,95 @@ export interface AnnotatedLeg {
    */
   path: LatLngPoint[];
   /**
-   * 'road_snapped'：步行段來自 Routes API WALK 路網幾何；仍不保證完整的人行道或無障礙資訊。
+   * 'transit_shape'：公車段來自 TDX 官方營運路線 Shape，並裁切至上下車站。
+   * 'road_snapped'：來自 Routes API WALK／DRIVE 路網幾何；仍不保證完整的人行道或公車營運線形。
    * 'approximate'：端點有依據，但點與點之間是直線，不是真實道路 / 軌道 shape。
    *   畫成虛線或加註「示意路線」有助於誠實呈現。
    * 'missing'：path 為空陣列時必為此值。
    */
   geometry_precision: GeometryPrecision;
+  transit_route_name?: string | null;
+  transit_route_uid?: string | null;
+  transit_direction?: number | null;
+  boarding_stop_uid?: string | null;
+  alighting_stop_uid?: string | null;
+}
+
+export interface TransitVehicleArrival {
+  vehicle_id: string;
+  plate_number: string;
+  eta_seconds: number;
+  position: LatLngPoint;
+  current_stop_uid?: string | null;
+  current_stop_name?: string | null;
+  is_low_floor?: boolean | null;
+  has_ramp?: boolean | null;
+  suitable_for_wheelchair: boolean;
+  timing_source: string;
+  position_source: string;
+  accessibility_source: string;
+  gps_time?: string | null;
+}
+
+export interface TransitArrivalSnapshot {
+  route_name: string;
+  route_uid: string;
+  direction: number;
+  boarding_stop_uid: string;
+  boarding_stop_name: string;
+  generated_at: string;
+  data_mode: string;
+  notices: string[];
+  arrivals: TransitVehicleArrival[];
+}
+
+export type TrafficClockMode = 'realtime' | 'schedule_playback';
+
+/** 一個由即時位置或公開時刻表驅動的 3D 交通物件。 */
+export interface TrafficVehicle {
+  vehicle_id: string;
+  mode: 'metro' | 'bus';
+  route_name: string;
+  route_uid: string;
+  direction: number;
+  label: string;
+  position: LatLngPoint;
+  path: LatLngPoint[];
+  progress: number;
+  segment_duration_seconds: number;
+  bearing: number;
+  next_stop_name?: string | null;
+  destination_name?: string | null;
+  eta_seconds?: number | null;
+  scheduled_time?: string | null;
+  source: string;
+  is_target: boolean;
+  plate_number?: string | null;
+  suitable_for_wheelchair?: boolean | null;
+  accessibility_source: string;
+}
+
+export interface TrafficSceneSnapshot {
+  generated_at: string;
+  clock_time: string;
+  clock_mode: TrafficClockMode;
+  timezone: string;
+  notices: string[];
+  vehicles: TrafficVehicle[];
+}
+
+export interface UserPreferences {
+  accessibility_mode: 'general' | 'wheelchair' | 'visual' | 'elderly';
+  profile_detail: string;
+  speech_rate: number;
+  theme: 'light' | 'dark';
+}
+
+export interface UserPreferencesSnapshot extends UserPreferences {
+  user_id: string;
+  updated_at?: string | null;
+  storage_mode: 'firestore' | 'memory' | 'memory_fallback';
+  notices: string[];
 }
 
 export interface Violation {

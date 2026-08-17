@@ -48,7 +48,7 @@
 | 後端 | FastAPI（部署目標 Cloud Run） |
 | Agent | Gemini + `google-genai` 自動 function calling |
 | 資料庫 | Firestore（一日版先用 repo 內的 JSON 種子資料）|
-| 路線候選 | repo 內 JSON 離線候選 + Google Routes API 步行幾何（無金鑰時 fallback） |
+| 路線候選 | repo 內 JSON 離線候選 + Google Routes API 步行幾何 + TDX 公車 Shape（皆可 fallback） |
 
 引擎寫在 Python 而不是前端 TypeScript，是因為 **agent 必須呼叫它**。目前直接使用
 `google-genai` 把既有引擎包成工具；若引擎放在前端，就得維護兩份規劃邏輯。
@@ -76,8 +76,12 @@ python -m venv .venv
 Copy-Item .env.example .env
 # 編輯 .env，填入 GEMINI_API_KEY（到 https://aistudio.google.com/app/apikey 取得）
 # 若要讓步行線沿道路，再啟用 Routes API 並填入 GOOGLE_ROUTES_API_KEY
+# 若要讓公車沿官方營運線形，填入 TDX_CLIENT_ID 與 TDX_CLIENT_SECRET
 .\.venv\Scripts\python.exe verify_engine.py       # 驗證差異化行為
 .\.venv\Scripts\python.exe verify_geometry.py     # 驗證幾何資料完整
+.\.venv\Scripts\python.exe verify_tdx_shape.py    # 驗證 TDX WKT 與兩條真實公車 Shape
+.\.venv\Scripts\python.exe verify_transit_arrivals.py # 驗證即時到站、低地板模擬標示與離線回退
+.\.venv\Scripts\python.exe verify_traffic_scene.py # 離線驗證時刻表交通物件、目標車與來源標示
 .\.venv\Scripts\python.exe verify_agent_tools.py  # 驗證 agent 工具（不需要金鑰）
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --port 8000 --reload
 ```
@@ -94,6 +98,9 @@ API 文件在 <http://127.0.0.1:8000/docs>。核心端點：
 | `GET /api/profiles` | 可用的障礙 profile 與可對話調整的參數 |
 | `GET /api/corridor` | 走廊無障礙種子資料，含每筆的 confidence |
 | `GET /api/accessibility` | 輪行臺北、捷運電梯 GPS 與異常公告；15 分鐘快取，官方來源失效時回退到 repo 快照 |
+| `GET /api/transit/arrivals` | TDX A2 車牌／位置與 ETA；低地板、斜坡板另以明確標示的 Demo 登錄補足 |
+| `GET /api/transit/scene` | 板南線捷運時刻表與公車班距驅動的 3D 交通物件；支援指定目標車與離峰回放 |
+| `GET/PUT /api/users/{id}/preferences` | 使用者主動同意後，以匿名 id 儲存障礙模式、語速與主題至 Firestore；不收定位／對話 |
 | `POST /api/chat` | 對話式規劃。Gemini 透過 function calling 呼叫上面的規劃工具，回傳文字回覆 + 相機指令 + 完整規劃結果 |
 
 `/api/chat` 需要 `GEMINI_API_KEY`，未設定時回 HTTP 503 並附取得金鑰的連結，
@@ -252,16 +259,25 @@ Agent 的 `/api/chat` 說明（`CameraCommand` 怎麼轉成相機動作），以
 - [x] 3D 路線導覽（路段切換、暫停／續播、快轉、進度拖曳、倍速與跟拍鏡頭）
 - [x] 路線預演後回到輪椅使用者出發視角，顯示並可朗讀第一步步行指引（固定位置，不追蹤 GPS）
 - [x] 輪行臺北與臺北捷運電梯／坡道 GPS、異常公告資料層（官方即時讀取 + CP950 解析 + 離線回退）
+- [x] TDX 公車官方 Shape（依 RouteUID／方向裁切上下車區間；失敗時 Google DRIVE／離線端點回退）
+- [x] 即將到站公車標記（TDX A2／ETA 每 15 秒更新；低地板與斜坡板明確標為 Demo 模擬）
+- [x] Mini Tokyo 3D 風格交通圖層（捷運／公車依 TDX 時刻表移動、彩色 GLB 長方體、可選車看資訊、目標車亮綠標記）
 - [x] 語音輸入、回覆朗讀、亮暗色與視障高對比模式
+- [x] Firestore 使用者偏好持久化（匿名 opt-in；不儲存定位與對話；未設定時明確使用記憶體回退）
 
 ### Demo 已知限制
 
 - 只有「台北車站 → 台北市政府」這一組起終點有候選路線；反向與其他地點尚未支援。
 - 17 個 leg 都有離線座標；設定 `GOOGLE_ROUTES_API_KEY` 後，步行段會取得道路貼合幾何
-  （`road_snapped`），未設定或 API 失敗則使用端點近似線。捷運與公車仍是示意 shape。
-- 導覽會把完整路程壓縮到約 28–70 秒以利 demo，不代表真實車程，目前也沒有車輛模型。
+  （`road_snapped`）。設定 TDX 憑證後，公車段使用官方營運 Shape（`transit_shape`）；
+  外部服務失敗才降級為 Google DRIVE 或端點近似線。捷運軌道目前仍是示意 shape。
+- 導覽會把完整路程壓縮到約 28–70 秒以利 demo，不代表真實車程；交通圖層目前以放大過的簡化 GLB 長方體呈現，尚未換成精細車模。
 - 預演結束後的第一步指引目前固定在路線起點，不會讀取、追蹤或儲存使用者即時位置。
-- 對話 session 存在 FastAPI process 的記憶體中，服務重啟後不保留，也不適合多 instance 部署。
+- TDX 目前回傳車牌、所在站序與 ETA，但沒有低地板／斜坡板欄位；MVP 會保留真實時間與位置來源，
+  並把車輛無障礙資格清楚標成 `demo_simulation`，不可當成官方車籍資料。
+- 捷運物件使用 TDX `StationTimeTable` 在站間內插，不是列車 GPS；公車背景物件使用 TDX 班距沿官方 Shape
+  內插。介面會分別顯示「TDX 時刻表推算／班距推算」，凌晨無可呈現班次時改用 14:10 時刻表回放。
+- 使用者偏好可存 Firestore，但對話 session 仍存在 FastAPI process 的記憶體中，服務重啟後不保留，也不適合多 instance 部署。
 - 前端遇到任何 `/api/chat` 錯誤都會靜默切到 mock；正式展示前應確認後端 log 的工具呼叫紀錄。
 - 後端尚無身分驗證與速率限制，只適合本機開發與受控 demo，不應直接公開上線。
 
@@ -307,5 +323,5 @@ Photorealistic 3D Maps 只能透過 `google.maps.importLibrary` 取得，而它�
 
 概念啟發自 [Mini Tokyo 3D](https://github.com/nagix/mini-tokyo-3d)（MIT License）——
 一個東京公共運輸的即時 3D 地圖。本專案未使用其程式碼（Mini Tokyo 3D 建構於
-Mapbox GL JS，本專案使用 Google Maps Platform），但其「車輛位置為沿路線 shape
-的時間函數」的動畫思路是本專案車輛圖層的設計來源。
+Mapbox GL JS，本專案使用 Google Maps Platform），但沿用它將「時刻表資料、播放時鐘、
+交通物件圖層」分離，以及把車輛位置視為沿路線 shape 的時間函數這兩項設計思路。

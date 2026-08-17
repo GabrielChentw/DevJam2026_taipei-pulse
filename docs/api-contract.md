@@ -72,7 +72,7 @@ curl "http://127.0.0.1:8000/api/compare?profiles=wheelchair,low_vision"
 ```ts
 {
   path: LatLngPoint[],           // 直接餵給 Polyline3DElement 的座標陣列
-  geometry_precision: string,    // 'road_snapped' | 'approximate' | 'missing'
+  geometry_precision: string,    // 'transit_shape' | 'road_snapped' | 'approximate' | 'missing'
   mode: 'walk' | 'metro' | 'bus',
   name: string,
 }
@@ -98,10 +98,14 @@ for (const leg of route.legs) {
 步行段在後端設定 `GOOGLE_ROUTES_API_KEY` 後，會以 Google Routes API 的 `WALK`
 模式取得高品質 GeoJSON 路網幾何，並標成 `road_snapped`。
 
+公車段在設定 `TDX_CLIENT_ID` 與 `TDX_CLIENT_SECRET` 後，會讀取 TDX 官方 WKT
+Shape，自動依 RouteUID、方向與上下車站裁切，並標成 `transit_shape`。TDX 暫時失敗時
+先降級到 Google Routes API `DRIVE` 的 `road_snapped` 路網；兩者皆不可用才使用端點線。
+
 其餘情況會是：
 
 - 走廊種子資料手打了車站、站牌、出口、目的地建築的座標
-- `approximate`：兩點之間是**直線**，不是真實道路或捷運軌道的 shape；Routes API
+- `approximate`：兩點之間是**直線**，不是真實道路或捷運軌道的 shape；外部 API
   未設定或暫時失敗時也會安全降級到這個值
 - 所以路線看起來會像用直線連接幾個點，不會貼著實際道路彎曲
 
@@ -109,6 +113,62 @@ for (const leg of route.legs) {
 畫 `approximate` 的路段，會比實線更誠實。如果看到 `missing`，代表資料完全缺漏，
 邏輯上就跳過不畫，這種情況目前不該出現（已用 `verify_geometry.py` 驗證過
 17 個 leg 全部至少有 2 個點），但程式仍要處理這個 case 以防未來新增路線時漏填。
+
+## 即將到站與低地板車輛
+
+```http
+GET /api/transit/arrivals?route_name=信義幹線&route_uid=TPE15708&direction=1&boarding_stop_uid=TPE170429
+```
+
+回傳的每一項車輛會分開標示三種來源：
+
+- `timing_source`：`tdx_live` 或 `demo_simulation`
+- `position_source`：`tdx_a2` 或 `demo_simulation`
+- `accessibility_source`：目前固定是 `demo_simulation`
+
+TDX A2／ETA 有車牌、所在站序與到站秒數，但目前沒有低地板或輪椅斜坡板欄位。
+因此前端可以顯示「適合輪椅」Demo，但必須同時顯示來源，不可把模擬資格包裝成官方即時事實。
+後端 15 秒快取；TDX 無班次或暫時失效時仍會回傳帶 `demo_fallback` 的可測試快照。
+
+## 3D 交通場景與目標車
+
+```http
+GET /api/transit/scene?target_mode=metro&target_route_name=板南線&target_route_uid=BL&target_direction=0&target_boarding_stop_uid=BL12
+```
+
+回傳 `clock_time`、`clock_mode` 與 `vehicles[]`。每個物件包含目前位置、這一段路徑、
+初始 `progress`、`segment_duration_seconds`、下一站、預計時間、是否為 `is_target`，以及資料來源。
+前端收到快照後用同一個動畫時鐘內插標記位置，每 10 秒重新同步一次。
+
+來源語意不可省略：
+
+- `tdx_station_timetable`：捷運官方站間時刻表推算，**不是列車 GPS**
+- `tdx_schedule_interpolation`：公車官方班距沿 TDX Shape 推算，**不是即時車機位置**
+- `tdx_a2`：TDX 公車動態位置
+- `demo_schedule_interpolation` / `demo_simulation`：Demo 回退資料
+
+`clock_mode=schedule_playback` 代表目前時段沒有可呈現的捷運班次，場景固定播放 14:10 的
+公開時刻表，畫面必須顯示「時刻表回放」，不可標成即時。目標公車仍沿用
+`/api/transit/arrivals` 的低地板資格與獨立來源標示。
+
+## Firestore 使用者偏好（需使用者主動選擇）
+
+```http
+PUT /api/users/{anonymousId}/preferences
+Content-Type: application/json
+
+{
+  "accessibility_mode": "wheelchair",
+  "profile_detail": "電動輪椅",
+  "speech_rate": 1.25,
+  "theme": "dark"
+}
+```
+
+同一路徑 `GET` 可讀回。回應中的 `storage_mode` 可能是 `firestore`、`memory` 或
+`memory_fallback`；只有 `firestore` 是可跨 Cloud Run instance／重啟的持久化結果。
+API schema 刻意不接受 GPS、行程歷史與聊天內容。公開部署仍需 Firebase Auth 或 Identity
+Platform 驗證；目前 anonymous id 僅適合受控 Demo，不能當成存取控制。
 
 ## `Feature.value` 可能是 `null` —— 不要當成 false
 

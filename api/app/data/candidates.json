@@ -94,8 +94,8 @@
             {
               "mode": "walk",
               "name": "步行至信義幹線站牌",
-              "duration_min": 3,
-              "walk_meters": 200,
+              "duration_min": 6,
+              "walk_meters": 420,
               "step_count": 0,
               "street_crossings": 1,
               "uncontrolled_crossings": 0,
@@ -106,6 +106,11 @@
               "mode": "bus",
               "name": "信義幹線",
               "bus_route": "SINYI_TRUNK",
+              "tdx_route_name": "信義幹線",
+              "tdx_route_uid": "TPE15708",
+              "tdx_direction": 1,
+              "boarding_stop_uid": "TPE170429",
+              "alighting_stop_uid": "TPE29460",
               "duration_min": 26,
               "stops": 11,
               "level_change": false,
@@ -114,8 +119,8 @@
             {
               "mode": "walk",
               "name": "步行至市府大樓",
-              "duration_min": 4,
-              "walk_meters": 260,
+              "duration_min": 8,
+              "walk_meters": 600,
               "step_count": 0,
               "street_crossings": 2,
               "uncontrolled_crossings": 0,
@@ -127,7 +132,7 @@
 
         {
           "id": "metro-bus",
-          "label": "板南線至忠孝敦化，轉 672 公車",
+          "label": "板南線至忠孝敦化，轉忠孝幹線公車",
           "legs": [
             {
               "mode": "walk",
@@ -151,35 +156,40 @@
             },
             {
               "mode": "walk",
-              "name": "轉乘步行至 672 站牌",
-              "duration_min": 3,
-              "walk_meters": 180,
+              "name": "轉乘步行至忠孝幹線站牌",
+              "duration_min": 2,
+              "walk_meters": 100,
               "step_count": 0,
               "street_crossings": 1,
               "uncontrolled_crossings": 0,
               "max_slope_percent": 1.5,
               "is_transfer": true,
-              "waypoints": ["zhongxiao_dunhua_stop", "bus672_zhongxiao_stop"]
+              "waypoints": ["zhongxiao_dunhua_stop", "zhongxiao_trunk_dunhua_stop"]
             },
             {
               "mode": "bus",
-              "name": "672",
-              "bus_route": "BUS_672",
+              "name": "忠孝幹線",
+              "bus_route": "ZHONGXIAO_TRUNK",
+              "tdx_route_name": "忠孝幹線",
+              "tdx_route_uid": "TPE10417",
+              "tdx_direction": 0,
+              "boarding_stop_uid": "TPE36064",
+              "alighting_stop_uid": "TPE36069",
               "duration_min": 11,
               "stops": 5,
               "level_change": false,
-              "waypoints": ["bus672_zhongxiao_stop", "bus672_near_city_hall_stop"]
+              "waypoints": ["zhongxiao_trunk_dunhua_stop", "zhongxiao_trunk_city_hall_stop"]
             },
             {
               "mode": "walk",
               "name": "步行至市府大樓",
-              "duration_min": 3,
-              "walk_meters": 200,
+              "duration_min": 8,
+              "walk_meters": 600,
               "step_count": 0,
               "street_crossings": 1,
               "uncontrolled_crossings": 0,
               "max_slope_percent": 1.0,
-              "waypoints": ["bus672_near_city_hall_stop", "city_hall_building"]
+              "waypoints": ["zhongxiao_trunk_city_hall_stop", "city_hall_building"]
             }
           ]
         },

@@ -5,7 +5,15 @@ import ChatPanel from './components/ChatPanel'
 import RoutePanel from './components/RoutePanel'
 import SosButton from './components/SosButton'
 import { BANNAN_CORRIDOR, CAMERA_PRESETS } from './data/corridor'
-import type { Map3DElementLike, Maps3dLibrary } from './lib/googleMaps'
+import {
+  fetchTrafficScene,
+  fetchTransitArrivals,
+  fetchUserPreferences,
+  saveUserPreferences,
+  type TrafficSceneTarget,
+} from './lib/api'
+import type { Map3DElementLike, Maps3dLibrary, Model3DElementLike } from './lib/googleMaps'
+import { createTrafficLayer, type TrafficLayerHandle } from './lib/trafficLayer'
 import {
   buildFirstNavigationCue,
   buildRouteTourTimeline,
@@ -17,6 +25,7 @@ import {
 } from './lib/routeTour'
 import type { AccessibilityMode, AppPhase, Message, PlannedRoute } from './types'
 import type { AgentResponse } from './mockData'
+import type { TrafficSceneSnapshot, TrafficVehicle, TransitArrivalSnapshot } from './types/api'
 import { getSpeechRate, setSpeechRate as persistSpeechRate, SPEECH_RATES, speak, stopSpeaking } from './lib/speech'
 
 const ROUTE_COLORS: Record<PlannedRoute['steps'][number]['type'], string> = {
@@ -56,6 +65,31 @@ const TOUR_WALK_ENTRY_CAMERA = { altitude: 38, range: 74, tilt: 68, fov: 70 }
 // Taipei Main Station's photogrammetry is tall and irregular. Stay close enough
 // to read the first turn while keeping the camera above the roof mesh.
 const FIRST_STEP_CAMERA = { altitude: 6, range: 140, tilt: 70, fov: 72 }
+
+function getAnonymousUserId(): string {
+  const key = 'taipei-pulse-anonymous-user-id'
+  const saved = window.localStorage.getItem(key)
+  if (saved) return saved
+  const id = crypto.randomUUID()
+  window.localStorage.setItem(key, id)
+  return id
+}
+
+function formatEta(seconds: number): string {
+  if (seconds <= 45) return '即將到站'
+  return `約 ${Math.max(1, Math.ceil(seconds / 60))} 分鐘`
+}
+
+function trafficSourceLabel(source: string): string {
+  const labels: Record<string, string> = {
+    tdx_a2: 'TDX A2 即時位置',
+    tdx_station_timetable: 'TDX 捷運時刻表推算',
+    tdx_schedule_interpolation: 'TDX 公車班距推算',
+    demo_schedule_interpolation: 'Demo 排程推算',
+    demo_simulation: 'Demo 模擬位置',
+  }
+  return labels[source] ?? source
+}
 
 function cameraForTourFrame(mode: TourMode, stepIndex: number) {
   // The first walking leg starts beside Taipei Main Station's large roof mesh;
@@ -107,8 +141,12 @@ export default function App() {
   const [transitioning, setTransitioning] = useState(false)
 
   const mapRef = useRef<Map3DElementLike | null>(null)
+  const mapsLibRef = useRef<Maps3dLibrary | null>(null)
   const selectedRouteRef = useRef<PlannedRoute | null>(null)
   const routeLinesRef = useRef<HTMLElement[]>([])
+  const transitMarkerRef = useRef<Model3DElementLike | null>(null)
+  const transitSnapshotRef = useRef<TransitArrivalSnapshot | null>(null)
+  const trafficLayerRef = useRef<TrafficLayerHandle | null>(null)
   const tourTimelineRef = useRef<RouteTourTimeline | null>(null)
   const tourFrameRef = useRef<number | null>(null)
   const tourLaunchTimeoutRef = useRef<number | null>(null)
@@ -124,7 +162,52 @@ export default function App() {
   const [tourStepIndex, setTourStepIndex] = useState(0)
   const [tourSpeed, setTourSpeed] = useState(1)
   const [navigationCue, setNavigationCue] = useState<FirstNavigationCue | null>(null)
+  const [transitSnapshot, setTransitSnapshot] = useState<TransitArrivalSnapshot | null>(null)
+  const [transitLoading, setTransitLoading] = useState(false)
+  const [transitError, setTransitError] = useState<string | null>(null)
+  const [trafficScene, setTrafficScene] = useState<TrafficSceneSnapshot | null>(null)
+  const [trafficSceneError, setTrafficSceneError] = useState<string | null>(null)
+  const [selectedTrafficVehicle, setSelectedTrafficVehicle] = useState<TrafficVehicle | null>(null)
+  const [trafficLayerVisible, setTrafficLayerVisible] = useState(true)
   const [activePreset, setActivePreset] = useState<string>('cityHall')
+  const anonymousUserIdRef = useRef(getAnonymousUserId())
+  const [profileDetail, setProfileDetail] = useState('')
+  const [preferenceStatus, setPreferenceStatus] = useState<'idle' | 'saving' | 'saved' | 'memory' | 'error'>('idle')
+
+  useEffect(() => {
+    if (window.localStorage.getItem('taipei-pulse-remember-preferences') !== 'true') return
+    let disposed = false
+    fetchUserPreferences(anonymousUserIdRef.current)
+      .then(snapshot => {
+        if (disposed || !snapshot.updated_at) return
+        setMode(snapshot.accessibility_mode)
+        setProfileDetail(snapshot.profile_detail)
+        setSpeechRate(snapshot.speech_rate)
+        persistSpeechRate(snapshot.speech_rate)
+        setDark(snapshot.theme === 'dark')
+        setPreferenceStatus(snapshot.storage_mode === 'firestore' ? 'saved' : 'memory')
+      })
+      .catch(() => {
+        if (!disposed) setPreferenceStatus('error')
+      })
+    return () => { disposed = true }
+  }, [])
+
+  const rememberPreferences = async () => {
+    setPreferenceStatus('saving')
+    try {
+      const snapshot = await saveUserPreferences(anonymousUserIdRef.current, {
+        accessibility_mode: mode,
+        profile_detail: profileDetail,
+        speech_rate: speechRate,
+        theme: dark ? 'dark' : 'light',
+      })
+      window.localStorage.setItem('taipei-pulse-remember-preferences', 'true')
+      setPreferenceStatus(snapshot.storage_mode === 'firestore' ? 'saved' : 'memory')
+    } catch {
+      setPreferenceStatus('error')
+    }
+  }
 
   const changeSpeechRate = (rate: number) => {
     stopSpeaking()
@@ -156,6 +239,10 @@ export default function App() {
     setTourStepIndex(0)
     setNavigationCue(null)
     setTourStatus('idle')
+    const arrival = transitSnapshotRef.current?.arrivals[0]
+    if (arrival && transitMarkerRef.current) {
+      transitMarkerRef.current.position = { ...arrival.position, altitude: 4 }
+    }
   }, [cancelTourTimers])
 
   const returnToFirstNavigationStep = useCallback(() => {
@@ -178,6 +265,10 @@ export default function App() {
     setTourStepIndex(cue.stepIndex)
     setActivePreset('mainStation')
     setTourStatus('returning')
+    const arrival = transitSnapshotRef.current?.arrivals[0]
+    if (arrival && transitMarkerRef.current) {
+      transitMarkerRef.current.position = { ...arrival.position, altitude: 4 }
+    }
     map.flyCameraTo({
       endCamera: {
         center: { ...cue.position, altitude: FIRST_STEP_CAMERA.altitude },
@@ -219,6 +310,12 @@ export default function App() {
       map.cameraPosition = { ...frame.position, altitude: camera.altitude }
     } else {
       map.center = { ...frame.position, altitude: camera.altitude }
+    }
+    if (frame.mode === 'bus' && transitMarkerRef.current) {
+      // The selected suitable bus moves along the official TDX shape during
+      // route preview, then returns to its latest arrival position afterwards.
+      transitMarkerRef.current.position = { ...frame.position, altitude: 4 }
+      transitMarkerRef.current.orientation = { heading: frame.heading, tilt: 0, roll: 0 }
     }
 
     if (now - tourLastUiUpdateRef.current > 180 || frame.finished) {
@@ -307,6 +404,15 @@ export default function App() {
     } else {
       map.center = { ...frame.position, altitude: camera.altitude }
     }
+    if (transitMarkerRef.current) {
+      const latestArrival = transitSnapshotRef.current?.arrivals[0]
+      transitMarkerRef.current.position = frame.mode === 'bus'
+        ? { ...frame.position, altitude: 4 }
+        : { ...(latestArrival?.position ?? frame.position), altitude: 4 }
+      if (frame.mode === 'bus') {
+        transitMarkerRef.current.orientation = { heading: frame.heading, tilt: 0, roll: 0 }
+      }
+    }
     setTourProgress(frame.progress)
     setTourMode(frame.mode)
     setTourStepIndex(frame.stepIndex)
@@ -355,6 +461,7 @@ export default function App() {
   // Map ready: 添加捷運站標記
   const handleMapReady = useCallback((map: Map3DElementLike, lib: Maps3dLibrary) => {
     mapRef.current = map
+    mapsLibRef.current = lib
     const { Marker3DElement, AltitudeMode } = lib
     for (const station of BANNAN_CORRIDOR) {
       const marker = new Marker3DElement({
@@ -370,7 +477,157 @@ export default function App() {
     routeLinesRef.current = selectedRouteRef.current
       ? drawRoute(map, lib, selectedRouteRef.current)
       : []
+    trafficLayerRef.current?.destroy()
+    trafficLayerRef.current = createTrafficLayer(map, lib, setSelectedTrafficVehicle)
   }, [])
+
+  useEffect(() => {
+    if (!trafficLayerRef.current) return
+    trafficLayerRef.current.update(
+      trafficLayerVisible && trafficScene
+        ? trafficScene
+        : {
+            generated_at: new Date().toISOString(),
+            clock_time: '--:--:--',
+            clock_mode: 'realtime',
+            timezone: 'Asia/Taipei',
+            notices: [],
+            vehicles: [],
+          },
+    )
+  }, [mapStatus.kind, trafficLayerVisible, trafficScene])
+
+  useEffect(() => {
+    if (phase === 'map') return
+    trafficLayerRef.current?.destroy()
+    trafficLayerRef.current = null
+  }, [phase])
+
+  useEffect(() => () => trafficLayerRef.current?.destroy(), [])
+
+  useEffect(() => {
+    const transitStep = selectedRoute?.steps.find(step =>
+      step.type !== 'walk'
+      && step.transitRouteUid
+      && step.transitDirection !== undefined,
+    )
+    const target: TrafficSceneTarget | null = transitStep ? {
+      mode: transitStep.type === 'mrt' ? 'metro' : 'bus',
+      routeName: transitStep.transitRouteName ?? transitStep.line ?? (transitStep.type === 'mrt' ? '板南線' : '公車'),
+      routeUid: transitStep.transitRouteUid!,
+      direction: transitStep.transitDirection!,
+      boardingStopUid: transitStep.boardingStopUid,
+    } : null
+
+    // A route change means a different vehicle is now the user's intended
+    // boarding target. Select it once; later 10-second refreshes preserve any
+    // background vehicle the user explicitly clicked.
+    setSelectedTrafficVehicle(null)
+
+    let disposed = false
+    const load = async () => {
+      try {
+        const scene = await fetchTrafficScene(target)
+        if (disposed) return
+        setTrafficScene(scene)
+        setTrafficSceneError(null)
+        setSelectedTrafficVehicle(current => {
+          if (!current) return scene.vehicles.find(vehicle => vehicle.is_target) ?? null
+          return scene.vehicles.find(vehicle => vehicle.vehicle_id === current.vehicle_id)
+            ?? scene.vehicles.find(vehicle => vehicle.is_target)
+            ?? null
+        })
+      } catch (error) {
+        if (!disposed) setTrafficSceneError(error instanceof Error ? error.message : '無法取得交通場景')
+      }
+    }
+    void load()
+    const interval = window.setInterval(() => void load(), 10_000)
+    return () => {
+      disposed = true
+      window.clearInterval(interval)
+    }
+  }, [selectedRoute])
+
+  useEffect(() => {
+    const busStep = selectedRoute?.steps.find(step =>
+      step.type === 'bus'
+      && step.transitRouteName
+      && step.transitRouteUid
+      && step.transitDirection !== undefined
+      && step.boardingStopUid,
+    )
+
+    transitMarkerRef.current?.remove()
+    transitMarkerRef.current = null
+    transitSnapshotRef.current = null
+    setTransitSnapshot(null)
+    setTransitError(null)
+    if (!busStep) {
+      setTransitLoading(false)
+      return
+    }
+
+    let disposed = false
+    const load = async (refresh: boolean) => {
+      setTransitLoading(true)
+      try {
+        const snapshot = await fetchTransitArrivals(
+          busStep.transitRouteName!,
+          busStep.transitRouteUid!,
+          busStep.transitDirection!,
+          busStep.boardingStopUid!,
+          refresh,
+        )
+        if (disposed) return
+        transitSnapshotRef.current = snapshot
+        setTransitSnapshot(snapshot)
+        setTransitError(null)
+      } catch (error) {
+        if (disposed) return
+        setTransitError(error instanceof Error ? error.message : '無法取得即將到站車輛')
+      } finally {
+        if (!disposed) setTransitLoading(false)
+      }
+    }
+
+    void load(false)
+    const interval = window.setInterval(() => void load(true), 15_000)
+    return () => {
+      disposed = true
+      window.clearInterval(interval)
+    }
+  }, [selectedRoute])
+
+  useEffect(() => {
+    const map = mapRef.current
+    const lib = mapsLibRef.current
+    const snapshot = transitSnapshot
+    const arrival = snapshot?.arrivals.find(item => item.suitable_for_wheelchair)
+      ?? snapshot?.arrivals[0]
+    if (!map || !lib || !snapshot || !arrival) return
+
+    if (!transitMarkerRef.current) {
+      const { Model3DInteractiveElement, Model3DElement, AltitudeMode } = lib
+      const Model = Model3DInteractiveElement ?? Model3DElement
+      transitMarkerRef.current = new Model({
+        position: { ...arrival.position, altitude: 4 },
+        orientation: { heading: 0, tilt: 0, roll: 0 },
+        scale: { x: 10.5, y: 9.75, z: 42 },
+        src: '/models/vehicle-target.glb',
+        altitudeMode: AltitudeMode?.RELATIVE_TO_GROUND ?? 'RELATIVE_TO_GROUND',
+      })
+      const selectTargetBus = () => {
+        const target = trafficScene?.vehicles.find(vehicle => vehicle.mode === 'bus' && vehicle.is_target)
+        if (target) setSelectedTrafficVehicle(target)
+      }
+      transitMarkerRef.current.addEventListener('gmp-click', selectTargetBus)
+      transitMarkerRef.current.addEventListener('click', selectTargetBus)
+      map.append(transitMarkerRef.current)
+    } else {
+      transitMarkerRef.current.position = { ...arrival.position, altitude: 4 }
+    }
+  }, [mapStatus.kind, trafficScene, transitSnapshot])
 
   // 訊息
   const addMessage = (msg: Message) => setMessages(prev => [...prev, msg])
@@ -378,6 +635,7 @@ export default function App() {
   // Agent 回覆處理（後端 API 或 mock 降級）
   const handleAgentResponse = useCallback((res: AgentResponse) => {
     if (res.detectedMode) setMode(res.detectedMode)
+    if (res.profileDetail) setProfileDetail(res.profileDetail)
     if (res.routesReady && res.routes) {
       setRoutes(res.routes)
       setSelectedRoute(null)
@@ -504,6 +762,19 @@ export default function App() {
                 {SPEECH_RATES.map(rate => <option key={rate} value={rate}>{rate}×</option>)}
               </select>
             </label>
+            <button
+              type="button"
+              className={`preference-save-button status-${preferenceStatus}`}
+              onClick={() => void rememberPreferences()}
+              disabled={preferenceStatus === 'saving'}
+              title="只儲存障礙模式、語速與主題，不會儲存定位或對話內容"
+            >
+              {preferenceStatus === 'saving' && '儲存中…'}
+              {preferenceStatus === 'saved' && '✓ 偏好已存 Firestore'}
+              {preferenceStatus === 'memory' && '✓ 偏好已暫存'}
+              {preferenceStatus === 'error' && '重試儲存偏好'}
+              {preferenceStatus === 'idle' && '記住偏好'}
+            </button>
             {/* 暗色切換 */}
             <button onClick={() => setDark(d => !d)} style={{
               width: 30, height: 30, borderRadius: 8,
@@ -567,6 +838,74 @@ export default function App() {
 
             <main className="app-body">
               <Map3D onReady={handleMapReady} onStatusChange={setMapStatus} />
+              <aside className="traffic-scene-panel" aria-label="時刻表交通圖層">
+                <div className="traffic-scene-header">
+                  <div>
+                    <strong>城市交通脈動</strong>
+                    <small>
+                      {trafficScene?.clock_mode === 'schedule_playback' ? '時刻表回放' : '現在時間'}　
+                      {trafficScene?.clock_time?.slice(0, 5) ?? '--:--'}
+                    </small>
+                  </div>
+                  <button
+                    type="button"
+                    className={trafficLayerVisible ? 'is-on' : undefined}
+                    onClick={() => setTrafficLayerVisible(value => !value)}
+                    aria-pressed={trafficLayerVisible}
+                  >{trafficLayerVisible ? '圖層開啟' : '圖層關閉'}</button>
+                </div>
+                {trafficSceneError && <div className="traffic-scene-notice">交通資料暫時無法更新</div>}
+                {trafficScene && (
+                  <div className="traffic-scene-counts">
+                    <span><i className="traffic-block traffic-block-metro" aria-hidden="true" />{trafficScene.vehicles.filter(vehicle => vehicle.mode === 'metro').length} 班捷運</span>
+                    <span><i className="traffic-block traffic-block-bus" aria-hidden="true" />{trafficScene.vehicles.filter(vehicle => vehicle.mode === 'bus').length} 輛公車</span>
+                    <span><i className="traffic-block traffic-block-target" aria-hidden="true" />目標車</span>
+                  </div>
+                )}
+                {selectedTrafficVehicle ? (
+                  <div className={`traffic-vehicle-card${selectedTrafficVehicle.is_target ? ' is-target' : ''}`} aria-live="polite">
+                    <div className="traffic-vehicle-title">
+                      <span className="traffic-selected-symbol" aria-hidden="true">
+                        <i className={`traffic-block ${selectedTrafficVehicle.is_target ? 'traffic-block-target' : selectedTrafficVehicle.mode === 'metro' ? 'traffic-block-metro' : 'traffic-block-bus'}`} />
+                      </span>
+                      <div>
+                        <small>{selectedTrafficVehicle.is_target ? '你的目標車' : '已選取車輛'}</small>
+                        <strong>{selectedTrafficVehicle.route_name}</strong>
+                      </div>
+                      {selectedTrafficVehicle.plate_number && <code>{selectedTrafficVehicle.plate_number}</code>}
+                    </div>
+                    <dl>
+                      <div><dt>下一站</dt><dd>{selectedTrafficVehicle.next_stop_name ?? '未提供'}</dd></div>
+                      <div><dt>目的地</dt><dd>{selectedTrafficVehicle.destination_name ?? '未提供'}</dd></div>
+                      <div><dt>{selectedTrafficVehicle.is_target ? '抵達' : '此段剩餘'}</dt><dd>{selectedTrafficVehicle.eta_seconds == null ? '—' : formatEta(selectedTrafficVehicle.eta_seconds)}</dd></div>
+                    </dl>
+                    <div className="traffic-vehicle-meta">
+                      <span>{trafficSourceLabel(selectedTrafficVehicle.source)}</span>
+                      {selectedTrafficVehicle.suitable_for_wheelchair === true && <strong>♿ 適合輪椅</strong>}
+                      {selectedTrafficVehicle.suitable_for_wheelchair == null && <em>無障礙車型待確認</em>}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="traffic-scene-notice">點選地圖上的捷運或公車查看資訊</div>
+                )}
+                {trafficScene && trafficScene.vehicles.length > 0 && (
+                  <div className="traffic-vehicle-picker" aria-label="選擇地圖車輛">
+                    {trafficScene.vehicles.slice(0, 8).map(vehicle => (
+                      <button
+                        key={vehicle.vehicle_id}
+                        type="button"
+                        className={`${vehicle.is_target ? 'is-target' : ''}${selectedTrafficVehicle?.vehicle_id === vehicle.vehicle_id ? ' is-selected' : ''}`}
+                        onClick={() => setSelectedTrafficVehicle(vehicle)}
+                        title={`${vehicle.route_name} · ${trafficSourceLabel(vehicle.source)}`}
+                      >
+                        <i className={`traffic-block ${vehicle.is_target ? 'traffic-block-target' : vehicle.mode === 'metro' ? 'traffic-block-metro' : 'traffic-block-bus'}`} aria-hidden="true" />
+                        {vehicle.is_target ? '目標 · ' : ''}{vehicle.route_name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {trafficScene?.notices[0] && <small className="traffic-scene-footnote">{trafficScene.notices[0]}</small>}
+              </aside>
               {selectedRoute && (
                 <div className="route-map-legend" aria-label="地圖路線圖例">
                   <strong>{selectedRoute.label}</strong>
@@ -629,6 +968,45 @@ export default function App() {
                         </div>
                         <span className="route-navigation-duration">約 {navigationCue.durationMinutes} 分</span>
                       </div>
+                      {selectedRoute.steps.some(step => step.type === 'bus') && (
+                        <div className="transit-arrival-card" aria-live="polite">
+                          {transitLoading && !transitSnapshot && (
+                            <div className="transit-arrival-loading">正在確認即將到站的低地板公車…</div>
+                          )}
+                          {transitError && !transitSnapshot && (
+                            <div className="transit-arrival-loading">暫時無法取得車輛資料，請依站牌資訊確認。</div>
+                          )}
+                          {transitSnapshot?.arrivals[0] && (() => {
+                            const arrival = transitSnapshot.arrivals[0]
+                            return (
+                              <>
+                                <div className="transit-arrival-heading">
+                                  <span className="transit-arrival-icon" aria-hidden="true">♿</span>
+                                  <div>
+                                    <small>即將搭乘 · {transitSnapshot.boarding_stop_name}</small>
+                                    <strong>{transitSnapshot.route_name}　{formatEta(arrival.eta_seconds)}</strong>
+                                  </div>
+                                  <span className="transit-arrival-plate">{arrival.plate_number}</span>
+                                </div>
+                                <div className="transit-arrival-access">
+                                  <span className={arrival.is_low_floor ? 'is-ok' : 'is-unknown'}>
+                                    {arrival.is_low_floor ? '✓ 低地板' : '? 低地板未知'}
+                                  </span>
+                                  <span className={arrival.has_ramp ? 'is-ok' : 'is-unknown'}>
+                                    {arrival.has_ramp ? '✓ 輪椅斜坡板' : '? 斜坡板未知'}
+                                  </span>
+                                  <strong>{arrival.suitable_for_wheelchair ? '適合輪椅搭乘' : '請先確認'}</strong>
+                                </div>
+                                <small className="transit-arrival-source">
+                                  {arrival.timing_source === 'tdx_live' ? '到站時間：TDX 即時' : '到站時間：Demo 模擬'} ·
+                                  {arrival.position_source === 'tdx_a2' ? ' 車輛位置：TDX A2' : ' 車輛位置：Demo 模擬'} ·
+                                  低地板資格：Demo 模擬
+                                </small>
+                              </>
+                            )
+                          })()}
+                        </div>
+                      )}
                       <div className="route-navigation-actions">
                         <button
                           type="button"

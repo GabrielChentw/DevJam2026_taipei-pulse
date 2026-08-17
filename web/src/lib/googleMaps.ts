@@ -7,7 +7,8 @@ export interface Maps3dLibrary {
   Marker3DElement: new (options: Record<string, unknown>) => Marker3DElementLike;
   Marker3DInteractiveElement: new (options: Record<string, unknown>) => Marker3DElementLike;
   Polyline3DElement: new (options: Record<string, unknown>) => HTMLElement;
-  Model3DElement: new (options: Record<string, unknown>) => HTMLElement;
+  Model3DElement: new (options: Record<string, unknown>) => Model3DElementLike;
+  Model3DInteractiveElement: new (options: Record<string, unknown>) => Model3DElementLike;
   MapMode: Record<string, string>;
   AltitudeMode: Record<string, string>;
 }
@@ -26,6 +27,14 @@ export interface LatLngAltitude {
 export interface Marker3DElementLike extends HTMLElement {
   position: LatLngAltitude;
   label?: string;
+}
+
+/** Interactive GLB model used for colored rectangular vehicle blocks. */
+export interface Model3DElementLike extends HTMLElement {
+  position: LatLngAltitude;
+  orientation?: { heading?: number; tilt?: number; roll?: number };
+  scale?: number | { x: number; y: number; z: number };
+  src?: string | URL;
 }
 
 /** Map3DElement 我們實際會用到的部分。 */

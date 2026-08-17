@@ -12,7 +12,19 @@ import type {
   PlanRequest,
   PlanResponse,
   ProfileSummary,
+  TransitArrivalSnapshot,
+  TrafficSceneSnapshot,
+  UserPreferences,
+  UserPreferencesSnapshot,
 } from '../types/api';
+
+export interface TrafficSceneTarget {
+  mode: 'metro' | 'bus';
+  routeName: string;
+  routeUid: string;
+  direction: number;
+  boardingStopUid?: string | null;
+}
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`/api${path}`, {
@@ -32,8 +44,55 @@ export function fetchProfiles(): Promise<ProfileSummary[]> {
   return request('/profiles');
 }
 
+export function fetchUserPreferences(userId: string): Promise<UserPreferencesSnapshot> {
+  return request(`/users/${encodeURIComponent(userId)}/preferences`);
+}
+
+export function saveUserPreferences(
+  userId: string,
+  preferences: UserPreferences,
+): Promise<UserPreferencesSnapshot> {
+  return request(`/users/${encodeURIComponent(userId)}/preferences`, {
+    method: 'PUT',
+    body: JSON.stringify(preferences),
+  });
+}
+
 export function fetchCorridor(): Promise<unknown> {
   return request('/corridor');
+}
+
+export function fetchTransitArrivals(
+  routeName: string,
+  routeUid: string,
+  direction: number,
+  boardingStopUid: string,
+  refresh = false,
+): Promise<TransitArrivalSnapshot> {
+  const params = new URLSearchParams({
+    route_name: routeName,
+    route_uid: routeUid,
+    direction: String(direction),
+    boarding_stop_uid: boardingStopUid,
+  });
+  if (refresh) params.set('refresh', 'true');
+  return request(`/transit/arrivals?${params.toString()}`);
+}
+
+export function fetchTrafficScene(
+  target?: TrafficSceneTarget | null,
+  refresh = false,
+): Promise<TrafficSceneSnapshot> {
+  const params = new URLSearchParams();
+  if (target) {
+    params.set('target_mode', target.mode);
+    params.set('target_route_name', target.routeName);
+    params.set('target_route_uid', target.routeUid);
+    params.set('target_direction', String(target.direction));
+    if (target.boardingStopUid) params.set('target_boarding_stop_uid', target.boardingStopUid);
+  }
+  if (refresh) params.set('refresh', 'true');
+  return request(`/transit/scene${params.size ? `?${params.toString()}` : ''}`);
 }
 
 export function planRoute(body: PlanRequest): Promise<PlanResponse> {

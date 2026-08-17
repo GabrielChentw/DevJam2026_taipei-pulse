@@ -13,9 +13,9 @@
 
 ```mermaid
 flowchart TB
-    subgraph SEED["種子資料 · 手工建置 + 一次性腳本"]
+    subgraph SEED["種子資料 · 手工建置 + 官方資料介接"]
         D1["corridor.json<br/>走廊 12 站<br/>電梯 / 出口 / 階梯 / 導盲磚"]
-        D2["routes.json<br/>2-3 條公車路線 shape<br/>TDX 靜態資料抓一次存檔"]
+        D2["TDX Shape / StopOfRoute<br/>官方公車線形與站點<br/>Google DRIVE / 端點離線回退"]
         D3["vehicles.json<br/>車牌 → 是否低地板"]
     end
 
@@ -224,8 +224,9 @@ flowchart TB
 
 | 面向 | 一日版 | 完整版 |
 |---|---|---|
-| 車輛位置 | 沿真實 shape 模擬 | TDX 即時動態 |
+| 車輛位置 | 目標公車用 TDX A2；背景公車依班距沿 Shape 內插；捷運依 StationTimeTable 站間內插 | TDX 即時動態 + Map matching |
 | 位置精度 | 直接繪製 | Map matching + 插值 |
+| 交通物件 | Google Maps `Model3DInteractiveElement` + 彩色 GLB 長方體，10 秒重新同步；離峰可用時刻表回放 | 精細 GLB 車模、GPU instancing、完整全市物件生命週期 |
 | 無障礙資料 | 手工建置 12 站 | 自動擷取全市 |
 | 資料庫 | Firestore | Cloud SQL + PostGIS + Redis |
 | Agent 部署 | 內嵌於 Cloud Run | Vertex AI Agent Engine |

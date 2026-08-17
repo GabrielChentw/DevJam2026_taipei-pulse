@@ -301,6 +301,220 @@ body {
 .route-swatch-mrt  { background: #1A73E8; }
 .route-swatch-bus  { background: #F29900; }
 
+.traffic-scene-panel {
+  position: absolute;
+  z-index: 7;
+  top: 112px;
+  left: 16px;
+  display: flex;
+  width: min(336px, calc(100% - 32px));
+  max-height: calc(100% - 134px);
+  overflow: auto;
+  flex-direction: column;
+  gap: 9px;
+  padding: 12px;
+  border: 1px solid var(--map-border);
+  border-radius: 14px;
+  color: var(--map-text);
+  background: var(--map-card-bg);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(12px);
+  font-size: 11px;
+}
+
+.preference-save-button {
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  background: var(--bg-input);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.preference-save-button:hover:not(:disabled) {
+  border-color: var(--green);
+  color: var(--green);
+}
+
+.preference-save-button.status-saved,
+.preference-save-button.status-memory {
+  border-color: color-mix(in srgb, var(--green) 55%, var(--border));
+  color: var(--green);
+  background: var(--green-light);
+}
+
+.preference-save-button.status-error { color: #b3261e; }
+.preference-save-button:disabled { cursor: wait; opacity: .7; }
+
+.traffic-scene-header,
+.traffic-vehicle-title,
+.traffic-scene-counts,
+.traffic-vehicle-meta,
+.traffic-vehicle-picker {
+  display: flex;
+  align-items: center;
+}
+
+.traffic-scene-header {
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.traffic-scene-header > div,
+.traffic-vehicle-title > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.traffic-scene-header strong { font-size: 14px; }
+.traffic-scene-header small,
+.traffic-vehicle-title small,
+.traffic-scene-footnote { color: var(--map-muted); }
+
+.traffic-scene-header button,
+.traffic-vehicle-picker button {
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  color: var(--map-text);
+  background: rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+  font: inherit;
+}
+
+.traffic-scene-header button {
+  padding: 5px 8px;
+  white-space: nowrap;
+}
+
+.traffic-scene-header button.is-on {
+  border-color: rgba(52, 168, 83, 0.75);
+  color: #9af0a8;
+  background: rgba(52, 168, 83, 0.22);
+}
+
+.traffic-scene-counts { gap: 7px; }
+.traffic-scene-counts span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 7px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.traffic-vehicle-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 9px;
+  border: 1px solid rgba(26, 115, 232, 0.5);
+  border-radius: 10px;
+  background: rgba(26, 115, 232, 0.14);
+}
+
+.traffic-vehicle-card.is-target {
+  border-color: rgba(89, 242, 13, 0.86);
+  background: rgba(52, 168, 83, 0.17);
+  box-shadow: inset 3px 0 #59f20d;
+}
+
+.traffic-vehicle-title { gap: 8px; }
+.traffic-selected-symbol {
+  display: grid;
+  width: 28px;
+  height: 24px;
+  place-items: center;
+  border-radius: 7px;
+  background: rgba(0, 0, 0, .2);
+}
+.traffic-vehicle-title strong { font-size: 13px; }
+.traffic-vehicle-title code {
+  margin-left: auto;
+  padding: 3px 6px;
+  border-radius: 5px;
+  color: var(--map-text);
+  background: rgba(0, 0, 0, 0.24);
+}
+
+.traffic-vehicle-card dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 5px;
+  margin: 0;
+}
+
+.traffic-vehicle-card dl div {
+  min-width: 0;
+  padding: 5px;
+  border-radius: 7px;
+  background: rgba(0, 0, 0, 0.16);
+}
+
+.traffic-vehicle-card dt { color: var(--map-muted); font-size: 9px; }
+.traffic-vehicle-card dd {
+  overflow: hidden;
+  margin: 2px 0 0;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.traffic-vehicle-meta { flex-wrap: wrap; gap: 5px; }
+.traffic-vehicle-meta span,
+.traffic-vehicle-meta strong,
+.traffic-vehicle-meta em {
+  padding: 3px 6px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-style: normal;
+}
+.traffic-vehicle-meta span { background: rgba(255, 255, 255, 0.1); }
+.traffic-vehicle-meta strong { color: #9af0a8; background: rgba(52, 168, 83, 0.22); }
+.traffic-vehicle-meta em { color: #ffe3ad; background: rgba(242, 153, 0, 0.2); }
+
+.traffic-vehicle-picker { flex-wrap: wrap; gap: 5px; }
+.traffic-vehicle-picker button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 7px;
+}
+.traffic-vehicle-picker button.is-selected { border-color: #8ab4f8; background: rgba(26, 115, 232, 0.3); }
+.traffic-vehicle-picker button.is-target { border-color: #7cff3a; }
+.traffic-scene-notice { color: #ffe3ad; }
+.traffic-scene-footnote { line-height: 1.35; }
+
+.traffic-block {
+  display: inline-block;
+  width: 18px;
+  height: 7px;
+  flex: 0 0 18px;
+  border: 1px solid rgba(255, 255, 255, .78);
+  border-radius: 2px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .35);
+}
+
+.traffic-block-bus { background: #f26005; }
+.traffic-block-metro { background: #0a57eb; }
+.traffic-block-target {
+  background: #59f20d;
+  border-color: #fff;
+  box-shadow: 0 0 0 2px rgba(89, 242, 13, .28), 0 0 8px rgba(89, 242, 13, .8);
+}
+
+@media (max-width: 760px) {
+  .traffic-scene-panel {
+    top: auto;
+    bottom: 12px;
+    max-height: 43%;
+  }
+}
+
 .route-tour-hud {
   position: absolute;
   z-index: 6;
@@ -488,6 +702,95 @@ body {
   color: #8fe59f;
   font-weight: 700;
   white-space: nowrap;
+}
+
+.transit-arrival-card {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 9px 10px;
+  border: 1px solid rgba(242, 153, 0, 0.55);
+  border-radius: 10px;
+  background: rgba(242, 153, 0, 0.13);
+}
+
+.transit-arrival-heading {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.transit-arrival-heading > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.transit-arrival-heading small,
+.transit-arrival-source,
+.transit-arrival-loading {
+  color: var(--map-muted);
+  font-size: 10px;
+}
+
+.transit-arrival-heading strong {
+  color: #ffd07a;
+  font-size: 13px;
+}
+
+.transit-arrival-icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 9px;
+  background: #F29900;
+  color: #1d1608;
+  font-size: 20px;
+}
+
+.transit-arrival-plate {
+  padding: 3px 7px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 6px;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.transit-arrival-access {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+}
+
+.transit-arrival-access span,
+.transit-arrival-access strong {
+  padding: 3px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+}
+
+.transit-arrival-access span.is-ok {
+  color: #9af0a8;
+  background: rgba(52, 168, 83, 0.24);
+}
+
+.transit-arrival-access span.is-unknown {
+  color: #ffe3ad;
+  background: rgba(242, 153, 0, 0.22);
+}
+
+.transit-arrival-access strong {
+  margin-left: auto;
+  color: #fff;
+  background: rgba(52, 168, 83, 0.55);
+}
+
+.transit-arrival-source {
+  line-height: 1.35;
 }
 
 .route-navigation-actions {

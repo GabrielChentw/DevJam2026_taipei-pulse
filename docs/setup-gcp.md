@@ -132,6 +132,31 @@ GOOGLE_ROUTES_API_KEY=AIzaSy...你的伺服器金鑰
 這把金鑰只由 FastAPI 後端使用，不要加上 `VITE_` 前綴，也不要沿用會送到瀏覽器的
 Maps JavaScript API 金鑰。未設定時後端會保留原本的端點示意幾何。
 
+公車營運線形由 TDX 提供。在 TDX 會員中心建立應用程式後，把後端專用憑證放進
+同一個 `api/.env`（不可放進 `web/.env.local`）：
+
+```dotenv
+TDX_CLIENT_ID=你的_Client_ID
+TDX_CLIENT_SECRET=你的_Client_Secret
+```
+
+可用 `.\.venv\Scripts\python.exe verify_tdx_shape.py` 確認信義幹線與忠孝幹線都取得
+`transit_shape`；未設定或 TDX 暫時不可用時會依序降級到 Google DRIVE 與離線端點線。
+
+若要讓「記住偏好」真正跨服務重啟保存，請在同一個 GCP 專案建立 **Firestore Native mode**
+資料庫，Cloud Run service account 加上 `roles/datastore.user`，並在 `api/.env`（本機）或
+Cloud Run 環境變數設定：
+
+```dotenv
+FIRESTORE_PROJECT_ID=你的_GCP_Project_ID
+FIRESTORE_DATABASE=(default)
+```
+
+本機使用 `gcloud auth application-default login`；Cloud Run 直接使用服務帳戶，不要下載或提交
+service-account JSON。資料寫在 `users/{anonymousId}/settings/preferences`，只含障礙模式、簡短輔具說明、
+語速與亮暗主題，不含定位、行程或對話。沒設定 Firestore 時 API 會回報 `storage_mode=memory`，
+方便測試但服務重啟後會消失。
+
 **重啟 dev server**（新增 `.env` 檔案 Vite 不會熱更新）：
 
 ```powershell

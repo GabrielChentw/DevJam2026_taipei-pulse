@@ -11,8 +11,9 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..data_sources.tdx_bus import TDXBusShapeGeometry
 from ..models import AnnotatedLeg, Confidence, Feature, GeometryPrecision, LatLngPoint
-from .routes_geometry import WalkingRouteGeometry
+from .routes_geometry import DrivingRouteGeometry, WalkingRouteGeometry
 
 # 車站設施中，會被複製到路段特徵上的欄位。
 _STATION_FEATURE_KEYS = (
@@ -64,11 +65,15 @@ class Annotator:
         self,
         corridor: dict[str, Any],
         walking_geometry: WalkingRouteGeometry | None = None,
+        bus_geometry: TDXBusShapeGeometry | None = None,
+        driving_geometry: DrivingRouteGeometry | None = None,
     ) -> None:
         self._stations = {s["id"]: s for s in corridor.get("stations", [])}
         self._bus_routes = {r["id"]: r for r in corridor.get("bus_routes", [])}
         self._landmarks = corridor.get("landmarks", {})
         self._walking_geometry = walking_geometry or WalkingRouteGeometry()
+        self._bus_geometry = bus_geometry or TDXBusShapeGeometry()
+        self._driving_geometry = driving_geometry or DrivingRouteGeometry()
 
     # ---------- 幾何 ----------
 
@@ -97,6 +102,7 @@ class Annotator:
         return resolved
 
     def prefetch_walking_paths(self, candidates: list[dict[str, Any]]) -> None:
+        """Compatibility wrapper retained for existing callers/tests."""
         paths = [
             self._waypoint_points(leg)
             for candidate in candidates
@@ -105,11 +111,34 @@ class Annotator:
         ]
         self._walking_geometry.prefetch(paths)
 
+    def prefetch_paths(self, candidates: list[dict[str, Any]]) -> None:
+        """Warm Google walking paths and official TDX bus shapes."""
+
+        self.prefetch_walking_paths(candidates)
+        bus_routes = [
+            (
+                str(leg.get("tdx_route_name") or leg.get("name") or ""),
+                self._waypoint_points(leg),
+                leg.get("tdx_route_uid"),
+                leg.get("tdx_direction"),
+            )
+            for candidate in candidates
+            for leg in candidate.get("legs", [])
+            if leg.get("mode") == "bus"
+        ]
+        self._bus_geometry.prefetch(bus_routes)
+
+        # If TDX is not configured, warm Google's road geometry now. If TDX is
+        # configured but a single route later fails, that leg still falls back
+        # to Google on demand.
+        if not self._bus_geometry.enabled:
+            self._driving_geometry.prefetch([points for _, points, _, _ in bus_routes])
+
     def _resolve_path(self, leg: dict[str, Any]) -> tuple[list[LatLngPoint], GeometryPrecision]:
         """leg 的 waypoints 轉成畫線用的座標陣列。
 
-        步行段優先使用 Routes API 路網幾何；沒有金鑰或請求失敗時保留端點線，
-        並標記 APPROXIMATE。其他運具目前仍使用種子資料的 waypoints。
+        步行段優先使用 Routes API 路網幾何；公車段優先使用 TDX 官方 Shape，
+        再降級到 Routes API DRIVE。外部服務皆不可用時保留端點示意線。
         """
         if not leg.get("waypoints"):
             return [], GeometryPrecision.MISSING
@@ -123,6 +152,19 @@ class Annotator:
             routed = self._walking_geometry.route(resolved)
             if routed:
                 return routed, GeometryPrecision.ROAD_SNAPPED
+
+        if leg.get("mode") == "bus":
+            routed = self._bus_geometry.route(
+                str(leg.get("tdx_route_name") or leg.get("name") or ""),
+                resolved,
+                leg.get("tdx_route_uid"),
+                leg.get("tdx_direction"),
+            )
+            if routed:
+                return routed, GeometryPrecision.TRANSIT_SHAPE
+            road_routed = self._driving_geometry.route(resolved)
+            if road_routed:
+                return road_routed, GeometryPrecision.ROAD_SNAPPED
 
         return resolved, GeometryPrecision.APPROXIMATE
 
@@ -172,6 +214,25 @@ class Annotator:
             features=features,
             path=path,
             geometry_precision=precision,
+            transit_route_name=(
+                leg.get("tdx_route_name") if mode == "bus" else "板南線" if mode == "metro" else None
+            ),
+            transit_route_uid=(
+                leg.get("tdx_route_uid") if mode == "bus" else "BL" if mode == "metro" else None
+            ),
+            transit_direction=(
+                leg.get("tdx_direction")
+                if mode == "bus"
+                else (0 if str(leg.get("to_station", "")) > str(leg.get("from_station", "")) else 1)
+                if mode == "metro"
+                else None
+            ),
+            boarding_stop_uid=(
+                leg.get("boarding_stop_uid") if mode == "bus" else leg.get("from_station") if mode == "metro" else None
+            ),
+            alighting_stop_uid=(
+                leg.get("alighting_stop_uid") if mode == "bus" else leg.get("to_station") if mode == "metro" else None
+            ),
         )
 
     def _apply_metro(self, leg: dict[str, Any], features: dict[str, Feature]) -> None:

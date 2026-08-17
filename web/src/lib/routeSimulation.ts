@@ -8,9 +8,8 @@
  * 把 walkLegs / metro 的處理接上跟公車一樣的 chaseLeg() 即可，不需要重寫。
  *
  * 已知限制（老實列出，不要假裝比實際完整）：
- *   - 這裡假設每個 leg.path 至少有兩個點，且點與點之間是直線（後端
- *     geometry_precision 標記為 'approximate' 時就是如此）。畫出來的公車
- *     移動路徑不是真實道路線形，是起訖點間的內插。
+ *   - 這裡假設每個 leg.path 至少有兩個點。公車段優先使用 TDX 官方 Shape；
+ *     geometry_precision 為 'approximate' 時才是端點示意線。
  *   - 動畫時長是為了「demo 好看」而定的固定秒數，不是等比例對應
  *     leg.duration_min 的真實時間（26 分鐘的公車不可能真的播 26 分鐘）。
  *   - 這段程式碼沒有在瀏覽器裡實際跑過確認畫面效果 —— 型別與 API 用法

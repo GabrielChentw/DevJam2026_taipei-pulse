@@ -24,6 +24,8 @@ class Confidence(str, Enum):
 class GeometryPrecision(str, Enum):
     """路段幾何的可信度。前端據此決定要不要在畫面上標註『示意路線』。"""
 
+    # TDX official transit route shape, clipped between the requested stops.
+    TRANSIT_SHAPE = "transit_shape"
     # Google Routes API WALK mode returned a road/path-network polyline.
     # This is more faithful than endpoint interpolation, but not a guarantee of
     # sidewalk or wheelchair accessibility.
@@ -69,6 +71,91 @@ class AnnotatedLeg(BaseModel):
     features: dict[str, Feature] = Field(default_factory=dict)
     path: list[LatLngPoint] = Field(default_factory=list)
     geometry_precision: GeometryPrecision = GeometryPrecision.MISSING
+    transit_route_name: str | None = None
+    transit_route_uid: str | None = None
+    transit_direction: int | None = None
+    boarding_stop_uid: str | None = None
+    alighting_stop_uid: str | None = None
+
+
+class TransitVehicleArrival(BaseModel):
+    """One approaching bus; source fields distinguish live and simulated facts."""
+
+    vehicle_id: str
+    plate_number: str
+    eta_seconds: int
+    position: LatLngPoint
+    current_stop_uid: str | None = None
+    current_stop_name: str | None = None
+    is_low_floor: bool | None = None
+    has_ramp: bool | None = None
+    suitable_for_wheelchair: bool
+    timing_source: str
+    position_source: str
+    accessibility_source: str
+    gps_time: str | None = None
+
+
+class TransitArrivalSnapshot(BaseModel):
+    route_name: str
+    route_uid: str
+    direction: int
+    boarding_stop_uid: str
+    boarding_stop_name: str
+    generated_at: str
+    data_mode: str
+    notices: list[str] = Field(default_factory=list)
+    arrivals: list[TransitVehicleArrival] = Field(default_factory=list)
+
+
+class TrafficVehicle(BaseModel):
+    """One map object driven by a live position or a published timetable."""
+
+    vehicle_id: str
+    mode: Literal["metro", "bus"]
+    route_name: str
+    route_uid: str
+    direction: int
+    label: str
+    position: LatLngPoint
+    path: list[LatLngPoint] = Field(default_factory=list)
+    progress: float
+    segment_duration_seconds: int
+    bearing: float = 0
+    next_stop_name: str | None = None
+    destination_name: str | None = None
+    eta_seconds: int | None = None
+    scheduled_time: str | None = None
+    source: str
+    is_target: bool = False
+    plate_number: str | None = None
+    suitable_for_wheelchair: bool | None = None
+    accessibility_source: str = "unknown"
+
+
+class TrafficSceneSnapshot(BaseModel):
+    generated_at: str
+    clock_time: str
+    clock_mode: str
+    timezone: str
+    notices: list[str] = Field(default_factory=list)
+    vehicles: list[TrafficVehicle] = Field(default_factory=list)
+
+
+class UserPreferences(BaseModel):
+    """Minimal anonymous accessibility preferences; never contains location."""
+
+    accessibility_mode: Literal["general", "wheelchair", "visual", "elderly"] = "general"
+    profile_detail: str = Field(default="", max_length=240)
+    speech_rate: float = Field(default=1.5, ge=0.5, le=2.0)
+    theme: Literal["light", "dark"] = "light"
+
+
+class UserPreferencesSnapshot(UserPreferences):
+    user_id: str
+    updated_at: str | None = None
+    storage_mode: Literal["firestore", "memory", "memory_fallback"]
+    notices: list[str] = Field(default_factory=list)
 
 
 class Violation(BaseModel):

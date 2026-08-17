@@ -178,9 +178,9 @@ def plan(request: PlanRequest) -> PlanResponse:
 
     candidates = _find_candidates(request.origin, request.destination)
     annotator = Annotator(load_corridor())
-    # Routes API is optional. When enabled, warm all distinct walking shapes in
-    # parallel; when disabled this is a no-op and planning stays fully offline.
-    annotator.prefetch_walking_paths(candidates)
+    # External geometry is optional. Warm Google walking paths and TDX bus
+    # shapes; either source can fail without changing deterministic scoring.
+    annotator.prefetch_paths(candidates)
 
     feasible: list[EvaluatedRoute] = []
     excluded: list[EvaluatedRoute] = []

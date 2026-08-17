@@ -17,6 +17,11 @@ export interface RouteStep {
   stationId?: string // 對應 corridor.ts 的站點 id
   path?: LatLngPoint[]
   geometryPrecision?: GeometryPrecision
+  transitRouteName?: string
+  transitRouteUid?: string
+  transitDirection?: number
+  boardingStopUid?: string
+  alightingStopUid?: string
 }
 
 export interface PlannedRoute {

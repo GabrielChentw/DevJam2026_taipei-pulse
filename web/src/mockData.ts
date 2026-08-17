@@ -9,9 +9,13 @@ function buildRoutes(from: string, to: string, mode: AccessibilityMode, wheelcha
   const mrt = (detail: string, min: number, stationId?: string): RouteStep => ({
     type: 'mrt', description: '搭乘捷運板南線', detail, duration: min,
     accessible: true, hasElevator: true, line: '板南線', stationId,
+    transitRouteName: '板南線', transitRouteUid: 'BL', transitDirection: 0,
+    boardingStopUid: stationId ?? 'BL12', alightingStopUid: 'BL18',
   })
   const bus = (detail: string, min: number, accessible: boolean): RouteStep => ({
-    type: 'bus', description: '搭乘公車 33 路', detail, duration: min, accessible, line: '33路',
+    type: 'bus', description: '搭乘信義幹線', detail, duration: min, accessible, line: '信義幹線',
+    transitRouteName: '信義幹線', transitRouteUid: 'TPE15708', transitDirection: 1,
+    boardingStopUid: 'TPE170429', alightingStopUid: 'TPE29460',
   })
 
   const wheelchairNote = wheelchairType === 'electric'
@@ -47,7 +51,7 @@ function buildRoutes(from: string, to: string, mode: AccessibilityMode, wheelcha
     fullyAccessible: mode !== 'visual',
     excluded: false,
     reason: {
-      wheelchair: '低地板公車 33 路，輪椅可直接上下車，下一班約 6 分鐘後到站',
+      wheelchair: '信義幹線低地板公車，輪椅可直接上下車；車輛資格與位置會在地圖上分別標示資料來源',
       visual: '公車較無語音提示，轉乘複雜度較高，建議優先考慮路線 A',
       elderly: '步行距離短，但公車站立時間較長，若在非尖峰時段可考慮',
       general: '公車沿途可觀察城市風景，適合不趕時間時的選擇',
@@ -203,9 +207,14 @@ function evalToPlanned(r: EvaluatedRoute, excluded: boolean, origin: string, des
       duration: leg.duration_min,
       accessible: r.violations.filter(v => v.leg_index === leg.index).length === 0,
       hasElevator: leg.features['elevator_available']?.value === true,
-      line: leg.mode === 'metro' ? '板南線' : undefined,
+      line: leg.mode === 'metro' ? '板南線' : leg.mode === 'bus' ? leg.name : undefined,
       path: leg.path,
       geometryPrecision: leg.geometry_precision,
+      transitRouteName: leg.transit_route_name ?? undefined,
+      transitRouteUid: leg.transit_route_uid ?? undefined,
+      transitDirection: leg.transit_direction ?? undefined,
+      boardingStopUid: leg.boarding_stop_uid ?? undefined,
+      alightingStopUid: leg.alighting_stop_uid ?? undefined,
     })),
     fullyAccessible: r.feasible && r.violations.length === 0,
     excluded,
