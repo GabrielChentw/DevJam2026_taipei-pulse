@@ -81,7 +81,6 @@ body {
   flex-shrink: 0;
   overflow: hidden;
   border-radius: 10px;
-  background: #fff;
 }
 
 .header-logo-mark img {
@@ -93,6 +92,49 @@ body {
   height: auto;
   pointer-events: none;
   user-select: none;
+}
+
+/* 暗色版原圖較寬，獨立縮放並置中裁出識別圖形。 */
+.header-logo-mark img.is-dark-logo {
+  top: -1px;
+  left: -35px;
+  width: 120px;
+}
+
+.header-speech-setting {
+  display: inline-flex;
+  height: 34px;
+  align-items: center;
+  gap: 9px;
+  padding: 0 4px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.header-speech-setting svg { color: var(--green); }
+
+.header-speech-setting select {
+  min-width: 68px;
+  height: 30px;
+  padding: 0 7px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  outline: 0;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+}
+
+.header-speech-setting:focus-within {
+  color: var(--text-primary);
+}
+
+.header-speech-setting select:focus-visible {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--green) 12%, transparent);
 }
 
 /* ── 通用動畫 ─────────────────────────────────────────────────────────────── */
@@ -115,6 +157,58 @@ body {
 .slide-up  { animation: slideUp 0.28s cubic-bezier(0.32, 0.72, 0, 1) both; }
 
 .typing-dot { animation: blink 1.2s ease-in-out infinite; }
+
+.chat-message-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+}
+
+.chat-message-row.is-user { flex-direction: row-reverse; }
+
+.chat-message-body {
+  min-width: 0;
+  max-width: calc(88% - 38px);
+}
+
+.chat-message-row.is-user .chat-message-body { text-align: right; }
+
+.chat-message-author {
+  margin-bottom: 5px;
+  padding: 0 2px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.chat-avatar {
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  align-items: center;
+  justify-content: center;
+  margin-top: 15px;
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow-xs);
+}
+
+.chat-avatar.is-agent {
+  background: var(--green-light);
+  color: var(--green);
+}
+
+.chat-avatar.is-user {
+  border-color: color-mix(in srgb, var(--green) 70%, var(--border));
+  background: var(--green);
+  color: #fff;
+}
+
+[data-access='visual'] .chat-avatar {
+  width: 38px;
+  height: 38px;
+  flex-basis: 38px;
+}
 
 @keyframes mic-pulse {
   0%, 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); }
@@ -159,6 +253,207 @@ body {
 .route-panel-scroll:focus-visible {
   outline: 2px solid var(--border-focus);
   outline-offset: -2px;
+}
+
+/* 3D 地圖上的路線圖例；文字會依步行幾何是否已貼合路網切換。 */
+.route-map-legend {
+  position: absolute;
+  z-index: 5;
+  top: 16px;
+  left: 16px;
+  max-width: min(360px, calc(100% - 32px));
+  padding: 12px 14px;
+  border: 1px solid var(--map-border);
+  border-radius: 12px;
+  color: var(--map-text);
+  background: var(--map-card-bg);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.24);
+  backdrop-filter: blur(10px);
+}
+
+.route-map-legend strong {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.route-map-legend-modes {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+}
+
+.route-map-legend-modes span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.route-swatch {
+  display: inline-block;
+  width: 18px;
+  height: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  border-radius: 999px;
+}
+
+.route-swatch-walk { background: #34A853; }
+.route-swatch-mrt  { background: #1A73E8; }
+.route-swatch-bus  { background: #F29900; }
+
+.route-tour-hud {
+  position: absolute;
+  z-index: 6;
+  right: 18px;
+  top: 18px;
+  display: flex;
+  width: min(570px, calc(100% - 36px));
+  flex-direction: column;
+  gap: 7px;
+  padding: 9px 11px;
+  border: 1px solid var(--map-border);
+  border-radius: 14px;
+  color: var(--map-text);
+  background: var(--map-card-bg);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.24);
+  backdrop-filter: blur(10px);
+  font-size: 12px;
+}
+
+.route-tour-hud.is-idle {
+  width: min(390px, calc(100% - 36px));
+  gap: 9px;
+  padding: 11px;
+}
+
+.route-tour-steps {
+  display: flex;
+  gap: 6px;
+}
+
+.route-tour-steps button {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 9px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 9px;
+  color: var(--map-text);
+  background: rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+  font: inherit;
+  transition: border-color 150ms ease, background 150ms ease;
+}
+
+.route-tour-steps button:hover,
+.route-tour-steps button.is-active {
+  border-color: rgba(82, 210, 115, 0.72);
+  background: rgba(52, 168, 83, 0.25);
+}
+
+.route-tour-steps button span {
+  font-weight: 700;
+}
+
+.route-tour-steps button small {
+  color: var(--map-muted);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.route-tour-intro {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.route-tour-intro > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.route-tour-intro strong {
+  font-size: 14px;
+}
+
+.route-tour-intro small {
+  color: var(--map-muted);
+  font-size: 10.5px;
+}
+
+.route-tour-summary,
+.route-tour-controls {
+  display: flex;
+  align-items: center;
+}
+
+.route-tour-summary {
+  justify-content: space-between;
+  padding: 0 3px;
+}
+
+.route-tour-summary strong {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.route-tour-controls {
+  gap: 7px;
+}
+
+.route-tour-controls button,
+.route-tour-controls select {
+  height: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 8px;
+  color: var(--map-text);
+  background: rgba(255, 255, 255, 0.1);
+  cursor: pointer;
+  font: inherit;
+}
+
+.route-tour-primary {
+  border-color: rgba(82, 210, 115, 0.7);
+  color: var(--map-text);
+  background: rgba(52, 168, 83, 0.28);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+}
+
+.route-tour-start {
+  min-width: 94px;
+  height: 34px;
+  padding: 0 13px;
+  border-style: solid;
+  border-width: 1px;
+  border-radius: 10px;
+}
+
+.route-tour-controls button {
+  padding: 0 8px;
+}
+
+.route-tour-controls select {
+  padding: 0 5px;
+}
+
+.route-tour-controls select option {
+  color: #202124;
+}
+
+.route-tour-scrubber {
+  min-width: 110px;
+  flex: 1;
+  accent-color: #52d273;
+  cursor: pointer;
 }
 
 /* ── 起點／終點卡 ────────────────────────────────────────────────────────── */
@@ -228,6 +523,18 @@ body {
   font-weight: 400;
 }
 
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .route-comparison {
   display: flex;
   flex-direction: column;
@@ -272,9 +579,9 @@ body {
 .route-summary-select {
   display: grid;
   flex: 1;
-  grid-template-columns: minmax(165px, 0.65fr) minmax(210px, 1.35fr) auto;
+  grid-template-columns: minmax(190px, 0.75fr) minmax(240px, 1.25fr);
   align-items: center;
-  gap: 16px;
+  gap: 18px;
   min-width: 0;
   padding: 12px 14px;
   border: 0;
@@ -290,7 +597,8 @@ body {
 }
 
 .route-summary-select:focus-visible,
-.route-summary-map:focus-visible {
+.route-summary-map:focus-visible,
+.route-summary-speak:focus-visible {
   outline: 2px solid var(--border-focus);
   outline-offset: -2px;
 }
@@ -309,8 +617,19 @@ body {
 
 .route-summary-primary,
 .route-summary-middle {
-  display: block;
   min-width: 0;
+}
+
+.route-summary-primary {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.route-summary-middle {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 .route-summary-name {
@@ -320,9 +639,14 @@ body {
 }
 
 .route-code-badge {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  margin-top: 4px;
   color: var(--text-muted);
   font-size: 10px;
   font-weight: 500;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -362,6 +686,20 @@ body {
   gap: 4px;
 }
 
+.route-mode-icon {
+  display: inline-flex;
+  align-items: center;
+  line-height: 0;
+  transform: translateY(1px);
+}
+
+.route-mode-duration {
+  color: var(--text-muted);
+  font-size: 10.5px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
 .route-mode-arrow {
   margin-left: 2px;
   color: var(--text-muted);
@@ -371,7 +709,14 @@ body {
 .route-summary-meta {
   flex-wrap: wrap;
   gap: 6px;
-  margin-top: 7px;
+}
+
+.route-summary-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 8px;
 }
 
 .route-summary-meta > span {
@@ -413,10 +758,64 @@ body {
   color: #fff;
 }
 
+.route-summary-actions {
+  display: flex;
+  width: 92px;
+  flex-shrink: 0;
+  flex-direction: column;
+  border-left: 1px solid var(--border);
+}
+
+.route-summary-actions button {
+  flex: 1;
+  width: 100%;
+  min-height: 42px;
+  border-left: 0;
+}
+
+.route-summary-speak {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--green);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.route-summary-speak:hover { background: var(--green-light); }
+
+.route-summary-speak.is-speaking {
+  background: var(--green);
+  color: #fff;
+}
+
+/* 視障模式的路線摘要採較大字級，附圖中的交通方式與時間也同步放大。 */
+[data-access='visual'] .journey-endpoint small { font-size: 13px; }
+[data-access='visual'] .journey-endpoint strong { font-size: 17px; }
+[data-access='visual'] .route-section-heading { font-size: 17px; }
+[data-access='visual'] .route-section-heading small { font-size: 14px; }
+[data-access='visual'] .route-summary-name { font-size: 17px; }
+[data-access='visual'] .route-code-badge,
+[data-access='visual'] .route-best-badge { font-size: 12px; }
+[data-access='visual'] .route-summary-time { font-size: 13px; }
+[data-access='visual'] .route-summary-time strong { font-size: 24px; }
+[data-access='visual'] .route-mode-chain { font-size: 14px; }
+[data-access='visual'] .route-mode-duration,
+[data-access='visual'] .route-summary-meta > span,
+[data-access='visual'] .route-summary-cue,
+[data-access='visual'] .route-summary-map,
+[data-access='visual'] .route-summary-speak { font-size: 13px; }
+
 @media (max-width: 900px) {
   .route-summary-select {
-    grid-template-columns: minmax(105px, 0.7fr) minmax(160px, 1.3fr);
-    gap: 10px;
+    grid-template-columns: minmax(130px, 0.75fr) minmax(0, 1.25fr);
+    gap: 12px;
   }
 
   .route-summary-cue {

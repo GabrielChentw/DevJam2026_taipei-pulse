@@ -1,19 +1,11 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import type { AccessibilityMode, Message } from '../types'
 import { sendChatMessage } from '../lib/api'
-import { getMockAgentResponse, planToRoutes, INITIAL_QUICK_ACTIONS } from '../mockData'
+import { getMockAgentResponse, planToRoutes, sanitizeUserFacingScore, INITIAL_QUICK_ACTIONS } from '../mockData'
 import type { AgentResponse } from '../mockData'
+import { speak } from '../lib/speech'
 
 // ── TTS ───────────────────────────────────────────────────────────────────────
-
-function speak(text: string) {
-  if (!('speechSynthesis' in window)) return
-  window.speechSynthesis.cancel()
-  const u = new SpeechSynthesisUtterance(text)
-  u.lang = 'zh-TW'
-  u.rate = 0.9
-  window.speechSynthesis.speak(u)
-}
 
 // ── 型別 ─────────────────────────────────────────────────────────────────────
 
@@ -22,6 +14,25 @@ interface Props {
   messages: Message[]
   onAddMessage: (msg: Message) => void
   onAgentResponse: (res: AgentResponse) => void
+}
+
+function ChatAvatar({ role }: { role: Message['role'] }) {
+  const isAgent = role === 'agent'
+  return (
+    <span className={`chat-avatar ${isAgent ? 'is-agent' : 'is-user'}`} aria-hidden="true">
+      {isAgent ? (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 3v2" /><rect x="4" y="6" width="16" height="14" rx="4" />
+          <circle cx="9" cy="12" r="1" fill="currentColor" /><circle cx="15" cy="12" r="1" fill="currentColor" />
+          <path d="M9 16h6" />
+        </svg>
+      ) : (
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="8" r="4" /><path d="M4.5 21a7.5 7.5 0 0 1 15 0" />
+        </svg>
+      )}
+    </span>
+  )
 }
 
 // ── SpeechRecognition 瀏覽器相容 ─────────────────────────────────────────────
@@ -68,18 +79,19 @@ export default function ChatPanel({ mode, messages, onAddMessage, onAgentRespons
     try {
       const chatRes = await sendChatMessage(sessionIdRef.current, text.trim())
       setTyping(false)
+      const userFacingReply = sanitizeUserFacingScore(chatRes.reply)
 
       const agentMsg: Message = {
         id: (Date.now() + 1).toString(),
         role: 'agent',
-        content: chatRes.reply,
+        content: userFacingReply,
         timestamp: new Date(),
       }
       onAddMessage(agentMsg)
-      if (mode === 'visual') speak(chatRes.reply)
+      if (mode === 'visual') speak(userFacingReply)
 
       const agentRes: AgentResponse = {
-        content: chatRes.reply,
+        content: userFacingReply,
         chatResponse: chatRes,
       }
 
@@ -208,18 +220,11 @@ export default function ChatPanel({ mode, messages, onAddMessage, onAgentRespons
         )}
 
         {messages.map(msg => (
-          <div key={msg.id} className="fade-up" style={{
-            display: 'flex', flexDirection: 'column',
-            alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start',
-          }}>
-            <div style={{
-              fontSize: 11, color: 'var(--text-muted)', marginBottom: 5,
-              paddingLeft: msg.role === 'agent' ? 2 : 0,
-              paddingRight: msg.role === 'user' ? 2 : 0,
-            }}>
-              {msg.role === 'agent' ? '路線助理' : '您'}
-            </div>
-            <div style={{ position: 'relative', maxWidth: '88%' }}>
+          <div key={msg.id} className={`chat-message-row fade-up ${msg.role === 'user' ? 'is-user' : 'is-agent'}`}>
+            <ChatAvatar role={msg.role} />
+            <div className="chat-message-body">
+              <div className="chat-message-author">{msg.role === 'agent' ? '路線助理' : '您'}</div>
+              <div style={{ position: 'relative', maxWidth: '100%' }}>
               <div style={{
                 padding: '11px 15px',
                 borderRadius: msg.role === 'user' ? '16px 4px 16px 16px' : '4px 16px 16px 16px',
@@ -230,7 +235,7 @@ export default function ChatPanel({ mode, messages, onAddMessage, onAgentRespons
                 border: msg.role === 'agent' ? '1.5px solid var(--border)' : 'none',
               }}>
                 {msg.role === 'agent'
-                  ? msg.content.split(/(\*\*[^*]+\*\*)/).map((part, i) =>
+                  ? sanitizeUserFacingScore(msg.content).split(/(\*\*[^*]+\*\*)/).map((part, i) =>
                       part.startsWith('**') && part.endsWith('**')
                         ? <strong key={i}>{part.slice(2, -2)}</strong>
                         : part
@@ -258,26 +263,30 @@ export default function ChatPanel({ mode, messages, onAddMessage, onAgentRespons
                   </svg>
                 </button>
               )}
+              </div>
             </div>
           </div>
         ))}
 
         {/* Typing indicator */}
         {typing && (
-          <div className="fade-up">
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 5, paddingLeft: 2 }}>路線助理</div>
-            <div style={{
-              display: 'inline-flex', padding: '10px 16px', gap: 5, alignItems: 'center',
-              borderRadius: '4px 16px 16px 16px',
-              background: 'var(--bubble-agent)', border: '1.5px solid var(--border)',
-              boxShadow: 'var(--shadow-xs)',
-            }}>
-              {[0, 1, 2].map(i => (
-                <span key={i} className="typing-dot" style={{
-                  width: 6, height: 6, borderRadius: '50%', background: 'var(--green)', display: 'inline-block',
-                  animationDelay: `${i * 0.2}s`,
-                }} />
-              ))}
+          <div className="chat-message-row is-agent fade-up">
+            <ChatAvatar role="agent" />
+            <div className="chat-message-body">
+              <div className="chat-message-author">路線助理</div>
+              <div style={{
+                display: 'inline-flex', padding: '10px 16px', gap: 5, alignItems: 'center',
+                borderRadius: '4px 16px 16px 16px',
+                background: 'var(--bubble-agent)', border: '1.5px solid var(--border)',
+                boxShadow: 'var(--shadow-xs)',
+              }}>
+                {[0, 1, 2].map(i => (
+                  <span key={i} className="typing-dot" style={{
+                    width: 6, height: 6, borderRadius: '50%', background: 'var(--green)', display: 'inline-block',
+                    animationDelay: `${i * 0.2}s`,
+                  }} />
+                ))}
+              </div>
             </div>
           </div>
         )}

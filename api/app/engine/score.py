@@ -2,8 +2,8 @@
 
 分數越低越好，語意是「對這個人的總負擔」。
 
-刻意保留完整的 breakdown：排序理由要能攤開給使用者看，也要能讓評審看懂
-為什麼輪椅和視障會得到不同答案。一個說不出理由的推薦系統在無障礙領域是沒有價值的。
+刻意保留完整的 breakdown 供除錯日誌與內部檢核使用；使用者介面只呈現
+影響排序的主要考量，避免把帶有假精確感的算式當成使用者需要理解的資訊。
 """
 
 from __future__ import annotations
@@ -81,5 +81,5 @@ def dominant_factors(breakdown: list[ScoreBreakdown], limit: int = 3) -> list[st
     for item in breakdown[:limit]:
         if item.contribution <= 0:
             continue
-        out.append(f"{label_for(item.feature)}（{item.raw_value:g} × {item.weight:g} = {item.contribution:.1f}）")
+        out.append(label_for(item.feature))
     return out

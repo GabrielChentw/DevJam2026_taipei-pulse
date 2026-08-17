@@ -62,7 +62,7 @@
 在 GCP Console 完成三件事：
 
 1. 建立專案並**連結有 credit 的計費帳戶**
-2. 啟用 **Maps JavaScript API**（只需要這一個，不需要 Map Tiles API）
+2. 啟用 **Maps JavaScript API**；若要讓步行線貼合路網，再啟用 **Routes API**
 3. 建立 API 金鑰
 
 逐步操作與疑難排解見 **[`docs/setup-gcp.md`](docs/setup-gcp.md)**。
@@ -75,6 +75,7 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 Copy-Item .env.example .env
 # 編輯 .env，填入 GEMINI_API_KEY（到 https://aistudio.google.com/app/apikey 取得）
+# 若要讓步行線沿道路，再啟用 Routes API 並填入 GOOGLE_ROUTES_API_KEY
 .\.venv\Scripts\python.exe verify_engine.py       # 驗證差異化行為
 .\.venv\Scripts\python.exe verify_geometry.py     # 驗證幾何資料完整
 .\.venv\Scripts\python.exe verify_agent_tools.py  # 驗證 agent 工具（不需要金鑰）

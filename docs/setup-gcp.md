@@ -122,6 +122,16 @@ VITE_GOOGLE_MAPS_API_KEY=AIzaSy...你的金鑰
 VITE_GOOGLE_MAPS_VERSION=alpha
 ```
 
+若要讓步行線貼合實際道路與步道路網，另在同一個 GCP 專案啟用 **Routes API**，
+建立受伺服器端限制的 API 金鑰，並填入 `api/.env`：
+
+```dotenv
+GOOGLE_ROUTES_API_KEY=AIzaSy...你的伺服器金鑰
+```
+
+這把金鑰只由 FastAPI 後端使用，不要加上 `VITE_` 前綴，也不要沿用會送到瀏覽器的
+Maps JavaScript API 金鑰。未設定時後端會保留原本的端點示意幾何。
+
 **重啟 dev server**（新增 `.env` 檔案 Vite 不會熱更新）：
 
 ```powershell

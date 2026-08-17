@@ -6,29 +6,293 @@ import RoutePanel from './components/RoutePanel'
 import SosButton from './components/SosButton'
 import { BANNAN_CORRIDOR, CAMERA_PRESETS } from './data/corridor'
 import type { Map3DElementLike, Maps3dLibrary } from './lib/googleMaps'
-import { createRouteSimulation, type RouteSimulationHandle } from './lib/routeSimulation'
-import type { AccessibilityMode, AppPhase, Message, PlannedRoute, RouteStep } from './types'
+import {
+  buildRouteTourTimeline,
+  routeTourFrameAt,
+  smoothHeading,
+  type RouteTourTimeline,
+  type TourMode,
+} from './lib/routeTour'
+import type { AccessibilityMode, AppPhase, Message, PlannedRoute } from './types'
 import type { AgentResponse } from './mockData'
+import { getSpeechRate, setSpeechRate as persistSpeechRate, SPEECH_RATES, stopSpeaking } from './lib/speech'
+
+const ROUTE_COLORS: Record<PlannedRoute['steps'][number]['type'], string> = {
+  walk: '#34A853',
+  mrt: '#1A73E8',
+  bus: '#F29900',
+}
+
+const TOUR_MODE_LABELS: Record<TourMode, string> = {
+  walk: '步行視角',
+  mrt: '捷運移動',
+  bus: '公車移動',
+}
+
+const TOUR_MODE_SHORT_LABELS: Record<TourMode, string> = {
+  walk: '步行',
+  mrt: '捷運',
+  bus: '公車',
+}
+
+const TOUR_SPEEDS = [0.5, 1, 1.5, 2] as const
+
+const TOUR_CAMERA: Record<TourMode, { altitude: number; range: number; tilt: number; fov: number }> = {
+  // Walking geometry can pass beside or through station photogrammetry. Keep
+  // the camera directly over the route, but high enough to clear those meshes.
+  walk: { altitude: 28, range: 58, tilt: 72, fov: 70 },
+  // Subway geometry is underground while Photorealistic 3D Maps only renders
+  // the city surface. Follow it cinematically above rooftops instead of flying
+  // the camera through buildings that are not part of the journey.
+  mrt: { altitude: 75, range: 230, tilt: 68, fov: 60 },
+  // Bus seed geometry is less detailed than walking geometry, so keep enough
+  // height to preserve context and avoid facade clipping.
+  bus: { altitude: 38, range: 150, tilt: 72, fov: 64 },
+}
+
+const TOUR_WALK_ENTRY_CAMERA = { altitude: 38, range: 74, tilt: 68, fov: 70 }
+
+function cameraForTourFrame(mode: TourMode, stepIndex: number) {
+  // The first walking leg starts beside Taipei Main Station's large roof mesh;
+  // stay above it, then drop closer to street level for later walking legs.
+  return mode === 'walk' && stepIndex === 0 ? TOUR_WALK_ENTRY_CAMERA : TOUR_CAMERA[mode]
+}
+
+function drawRoute(
+  map: Map3DElementLike,
+  lib: Maps3dLibrary,
+  route: PlannedRoute,
+): HTMLElement[] {
+  const { Polyline3DElement, AltitudeMode } = lib
+
+  return route.steps.flatMap((step, index) => {
+    if (!step.path || step.path.length < 2) return []
+
+    // Walking stays just above the road surface. Transit lines are lifted so
+    // they read as a clear journey layer instead of cutting through 3D meshes.
+    const lineAltitude = step.type === 'mrt' ? 36 : step.type === 'bus' ? 8 : 2.8
+    const path = step.path.map(({ lat, lng }) => ({ lat, lng, altitude: lineAltitude }))
+    const line = new Polyline3DElement({
+      path,
+      strokeColor: ROUTE_COLORS[step.type],
+      strokeWidth: step.type === 'mrt' ? 10 : step.type === 'walk' ? 9 : 7,
+      outerColor: '#FFFFFF',
+      outerWidth: step.type === 'mrt' ? 0.36 : 0.28,
+      altitudeMode: AltitudeMode?.RELATIVE_TO_GROUND ?? 'RELATIVE_TO_GROUND',
+      drawsOccludedSegments: true,
+      geodesic: true,
+      zIndex: 100 + index,
+    })
+    map.append(line)
+    return [line]
+  })
+}
 
 
 export default function App() {
   const [phase, setPhase]               = useState<AppPhase>('chat')
   const [mode, setMode]                 = useState<AccessibilityMode>('general')
   const [dark, setDark]                 = useState(false)
+  const [speechRate, setSpeechRate]     = useState(getSpeechRate)
   const [messages, setMessages]         = useState<Message[]>([])
   const [routes, setRoutes]             = useState<PlannedRoute[]>([])
+  const [selectedRoute, setSelectedRoute] = useState<PlannedRoute | null>(null)
 
   const [mapStatus, setMapStatus]       = useState<MapStatus>({ kind: 'loading' })
   const [transitioning, setTransitioning] = useState(false)
 
   const mapRef = useRef<Map3DElementLike | null>(null)
-  const maps3dLibRef = useRef<Maps3dLibrary | null>(null)
+  const selectedRouteRef = useRef<PlannedRoute | null>(null)
+  const routeLinesRef = useRef<HTMLElement[]>([])
+  const tourTimelineRef = useRef<RouteTourTimeline | null>(null)
+  const tourFrameRef = useRef<number | null>(null)
+  const tourLaunchTimeoutRef = useRef<number | null>(null)
+  const tourLastFrameAtRef = useRef(0)
+  const tourElapsedRef = useRef(0)
+  const tourSpeedRef = useRef(1)
+  const tourHeadingRef = useRef(0)
+  const tourLastUiUpdateRef = useRef(0)
+  const [tourStatus, setTourStatus] = useState<'idle' | 'running' | 'paused' | 'completed'>('idle')
+  const [tourProgress, setTourProgress] = useState(0)
+  const [tourMode, setTourMode] = useState<TourMode>('walk')
+  const [tourStepIndex, setTourStepIndex] = useState(0)
+  const [tourSpeed, setTourSpeed] = useState(1)
 
-  // ── 路線模擬（開始模擬：鏡頭站到起點，沿路線跟拍，公車段有移動標記）──────
-  const [selectedRoute, setSelectedRoute] = useState<PlannedRoute | null>(null)
-  const [simActive, setSimActive]         = useState(false)
-  const [simLegLabel, setSimLegLabel]     = useState<string | null>(null)
-  const simulationRef = useRef<RouteSimulationHandle | null>(null)
+  const changeSpeechRate = (rate: number) => {
+    stopSpeaking()
+    setSpeechRate(rate)
+    persistSpeechRate(rate)
+  }
+  const cancelTourTimers = useCallback(() => {
+    if (tourFrameRef.current !== null) {
+      window.cancelAnimationFrame(tourFrameRef.current)
+      tourFrameRef.current = null
+    }
+    if (tourLaunchTimeoutRef.current !== null) {
+      window.clearTimeout(tourLaunchTimeoutRef.current)
+      tourLaunchTimeoutRef.current = null
+    }
+  }, [])
+
+  const stopRouteTour = useCallback(() => {
+    cancelTourTimers()
+    mapRef.current?.stopCameraAnimation()
+    tourTimelineRef.current = null
+    tourElapsedRef.current = 0
+    tourLastFrameAtRef.current = 0
+    setTourProgress(0)
+    setTourStepIndex(0)
+    setTourStatus('idle')
+  }, [cancelTourTimers])
+
+  const animateRouteTour = useCallback((now: number) => {
+    const map = mapRef.current
+    const timeline = tourTimelineRef.current
+    if (!map || !timeline) return
+
+    if (tourLastFrameAtRef.current === 0) tourLastFrameAtRef.current = now
+    const frameDelta = Math.min(100, now - tourLastFrameAtRef.current)
+    tourLastFrameAtRef.current = now
+    const elapsed = tourElapsedRef.current + frameDelta * tourSpeedRef.current
+    tourElapsedRef.current = elapsed
+    const frame = routeTourFrameAt(timeline, elapsed)
+    const camera = cameraForTourFrame(frame.mode, frame.stepIndex)
+    tourHeadingRef.current = smoothHeading(tourHeadingRef.current, frame.heading)
+
+    // A low, forward-looking chase camera. Direct property updates avoid the
+    // parabolic arc that repeated flyCameraTo calls would create.
+    map.heading = tourHeadingRef.current
+    map.tilt = camera.tilt
+    map.range = camera.range
+    map.fov = camera.fov
+    if (frame.mode === 'walk') {
+      // Lock the physical camera to the walking geometry. Using center alone
+      // leaves it far behind the route and makes it cut across corners.
+      map.cameraPosition = { ...frame.position, altitude: camera.altitude }
+    } else {
+      map.center = { ...frame.position, altitude: camera.altitude }
+    }
+
+    if (now - tourLastUiUpdateRef.current > 180 || frame.finished) {
+      tourLastUiUpdateRef.current = now
+      setTourProgress(frame.progress)
+      setTourMode(frame.mode)
+      setTourStepIndex(frame.stepIndex)
+    }
+
+    if (frame.finished) {
+      tourFrameRef.current = null
+      setTourStatus('completed')
+      return
+    }
+    tourFrameRef.current = window.requestAnimationFrame(animateRouteTour)
+  }, [])
+
+  const startRouteTour = useCallback(() => {
+    const map = mapRef.current
+    if (!map || !selectedRouteRef.current) return
+
+    if (tourStatus === 'paused' && tourTimelineRef.current) {
+      tourLastFrameAtRef.current = performance.now()
+      setTourStatus('running')
+      tourFrameRef.current = window.requestAnimationFrame(animateRouteTour)
+      return
+    }
+
+    cancelTourTimers()
+    const timeline = buildRouteTourTimeline(selectedRouteRef.current)
+    if (!timeline) return
+    tourTimelineRef.current = timeline
+    tourElapsedRef.current = 0
+    tourLastFrameAtRef.current = 0
+    setTourProgress(0)
+    setTourMode(timeline.edges[0].mode)
+    setTourStepIndex(timeline.edges[0].stepIndex)
+    setTourStatus('running')
+
+    const firstFrame = routeTourFrameAt(timeline, 0)
+    const firstCamera = cameraForTourFrame(firstFrame.mode, firstFrame.stepIndex)
+    tourHeadingRef.current = firstFrame.heading
+    map.stopCameraAnimation()
+    map.flyCameraTo({
+      endCamera: {
+        cameraPosition: { ...firstFrame.position, altitude: firstCamera.altitude },
+        range: firstCamera.range,
+        tilt: firstCamera.tilt,
+        heading: firstFrame.heading,
+      },
+      durationMillis: 1400,
+    })
+    tourLaunchTimeoutRef.current = window.setTimeout(() => {
+      tourLaunchTimeoutRef.current = null
+      tourLastFrameAtRef.current = performance.now()
+      tourFrameRef.current = window.requestAnimationFrame(animateRouteTour)
+    }, 1450)
+  }, [animateRouteTour, cancelTourTimers, tourStatus])
+
+  const pauseRouteTour = useCallback(() => {
+    cancelTourTimers()
+    mapRef.current?.stopCameraAnimation()
+    setTourStatus('paused')
+  }, [cancelTourTimers])
+
+  const seekRouteTour = useCallback((elapsedMs: number) => {
+    const map = mapRef.current
+    const timeline = tourTimelineRef.current
+    if (!map || !timeline) return
+
+    const clamped = Math.min(Math.max(elapsedMs, 0), timeline.durationMs)
+    const frame = routeTourFrameAt(timeline, clamped)
+    const camera = cameraForTourFrame(frame.mode, frame.stepIndex)
+    tourElapsedRef.current = clamped
+    tourLastFrameAtRef.current = performance.now()
+    tourHeadingRef.current = frame.heading
+
+    map.stopCameraAnimation()
+    map.heading = frame.heading
+    map.tilt = camera.tilt
+    map.range = camera.range
+    map.fov = camera.fov
+    if (frame.mode === 'walk') {
+      map.cameraPosition = { ...frame.position, altitude: camera.altitude }
+    } else {
+      map.center = { ...frame.position, altitude: camera.altitude }
+    }
+    setTourProgress(frame.progress)
+    setTourMode(frame.mode)
+    setTourStepIndex(frame.stepIndex)
+
+    if (frame.finished) {
+      cancelTourTimers()
+      setTourStatus('completed')
+    } else if (tourStatus === 'completed') {
+      setTourStatus('paused')
+    }
+  }, [cancelTourTimers, tourStatus])
+
+  const jumpToRouteStep = useCallback((stepIndex: number) => {
+    const route = selectedRouteRef.current
+    if (!route) return
+
+    const timeline = tourTimelineRef.current ?? buildRouteTourTimeline(route)
+    const firstEdge = timeline?.edges.find(edge => edge.stepIndex === stepIndex)
+    if (!timeline || !firstEdge) return
+
+    cancelTourTimers()
+    tourTimelineRef.current = timeline
+    // Move just inside the segment so a shared boundary belongs to the newly
+    // selected step instead of the final edge of the previous one.
+    seekRouteTour(firstEdge.startsAtMs + 1)
+    setTourStatus('paused')
+  }, [cancelTourTimers, seekRouteTour])
+
+  const changeTourSpeed = useCallback((speed: number) => {
+    tourSpeedRef.current = speed
+    tourLastFrameAtRef.current = performance.now()
+    setTourSpeed(speed)
+  }, [])
+
+  useEffect(() => () => cancelTourTimers(), [cancelTourTimers])
 
   // Theme
   useEffect(() => {
@@ -53,6 +317,11 @@ export default function App() {
       })
       map.append(marker)
     }
+
+    routeLinesRef.current.forEach(line => line.remove())
+    routeLinesRef.current = selectedRouteRef.current
+      ? drawRoute(map, lib, selectedRouteRef.current)
+      : []
   }, [])
 
   // 訊息
@@ -63,6 +332,8 @@ export default function App() {
     if (res.detectedMode) setMode(res.detectedMode)
     if (res.routesReady && res.routes) {
       setRoutes(res.routes)
+      setSelectedRoute(null)
+      selectedRouteRef.current = null
     }
 
     // 執行後端 agent 的相機指令
@@ -95,9 +366,11 @@ export default function App() {
     }
   }, [mapRef])
 
-  // 選擇路線 → 切換到地圖，並記住這條路線供「開始模擬」使用
+  // 選擇路線 → 切換到地圖
   const handleSelectRoute = (route: PlannedRoute) => {
+    stopRouteTour()
     setSelectedRoute(route)
+    selectedRouteRef.current = route
     setTransitioning(true)
     setTimeout(() => {
       setPhase('map')
@@ -117,10 +390,7 @@ export default function App() {
 
   // 返回對話：順手停掉正在跑的模擬，避免切回對話後鏡頭還在背景亂飛
   const handleBackToChat = () => {
-    simulationRef.current?.destroy()
-    simulationRef.current = null
-    setSimActive(false)
-    setSimLegLabel(null)
+    stopRouteTour()
     setTransitioning(true)
     setTimeout(() => { setPhase('chat'); setTransitioning(false) }, 220)
   }
@@ -160,22 +430,24 @@ export default function App() {
 
   const flyTo = useCallback((preset: (typeof CAMERA_PRESETS)[number]) => {
     if (!mapRef.current) return
+    stopRouteTour()
     setActivePreset(preset.id)
     mapRef.current.flyCameraTo({
       endCamera: { center: preset.center, range: preset.range, tilt: preset.tilt, heading: preset.heading },
       durationMillis: 2500,
     })
-  }, [])
+  }, [stopRouteTour])
 
   const orbit = useCallback(() => {
     if (!mapRef.current) return
+    stopRouteTour()
     const preset = CAMERA_PRESETS.find(p => p.id === activePreset) ?? CAMERA_PRESETS[1]
     mapRef.current.flyCameraAround({
       camera: { center: preset.center, range: preset.range, tilt: preset.tilt, heading: preset.heading },
       durationMillis: 12000,
       rounds: 1,
     })
-  }, [activePreset])
+  }, [activePreset, stopRouteTour])
 
   // ── 渲染 ──────────────────────────────────────────────────────────────────────
   return (
@@ -192,7 +464,11 @@ export default function App() {
           {/* Logo */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
             <div className="header-logo-mark" aria-hidden="true">
-              <img src="/logo.png?v=2" alt="" />
+              <img
+                className={dark ? 'is-dark-logo' : undefined}
+                src={dark ? '/logo_b.png?v=1' : '/logo.png?v=2'}
+                alt=""
+              />
             </div>
             <div>
               <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '0.2px' }}>Taipei Pulse</span>
@@ -201,6 +477,16 @@ export default function App() {
           </div>
 
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
+            <label className="header-speech-setting">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+              </svg>
+              <span>語速</span>
+              <select value={speechRate} onChange={event => changeSpeechRate(Number(event.currentTarget.value))} aria-label="全站朗讀速度">
+                {SPEECH_RATES.map(rate => <option key={rate} value={rate}>{rate}×</option>)}
+              </select>
+            </label>
             {/* 暗色切換 */}
             <button onClick={() => setDark(d => !d)} style={{
               width: 30, height: 30, borderRadius: 8,
@@ -243,6 +529,7 @@ export default function App() {
               <RoutePanel
                 routes={routes}
                 onSelectRoute={handleSelectRoute}
+                speechRate={speechRate}
               />
             </div>
           </div>
@@ -263,9 +550,110 @@ export default function App() {
 
             <main className="app-body">
               <Map3D onReady={handleMapReady} onStatusChange={setMapStatus} />
-              {simLegLabel && (
-                <div className="sim-status-badge" role="status" aria-live="polite">
-                  🚌 {simLegLabel}
+              {selectedRoute && (
+                <div className="route-map-legend" aria-label="地圖路線圖例">
+                  <strong>{selectedRoute.label}</strong>
+                  <div className="route-map-legend-modes">
+                    <span><i className="route-swatch route-swatch-walk" />步行</span>
+                    <span><i className="route-swatch route-swatch-mrt" />捷運</span>
+                    <span><i className="route-swatch route-swatch-bus" />公車</span>
+                  </div>
+                </div>
+              )}
+              {selectedRoute && (
+                <div className={`route-tour-hud${tourStatus === 'idle' ? ' is-idle' : ''}`}>
+                  <div className="route-tour-steps" aria-label="切換路線區段">
+                    {selectedRoute.steps.map((step, stepIndex) => (
+                      step.path && step.path.length > 1 && (
+                        <button
+                          key={`${step.type}-${stepIndex}`}
+                          type="button"
+                          className={tourStatus !== 'idle' && tourStepIndex === stepIndex ? 'is-active' : undefined}
+                          onClick={() => jumpToRouteStep(stepIndex)}
+                          aria-pressed={tourStatus !== 'idle' && tourStepIndex === stepIndex}
+                        >
+                          <span>{TOUR_MODE_SHORT_LABELS[step.type]}</span>
+                          <small>{step.duration} 分</small>
+                        </button>
+                      )
+                    ))}
+                  </div>
+                  {tourStatus === 'idle' ? (
+                    <div className="route-tour-intro">
+                      <div>
+                        <strong>沿路線觀看</strong>
+                        <small>可直接切換行程區段</small>
+                      </div>
+                      <button
+                        type="button"
+                        className="route-tour-primary route-tour-start"
+                        onClick={startRouteTour}
+                        disabled={mapStatus.kind !== 'ready'}
+                      >
+                        開始導覽
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="route-tour-summary">
+                        <span role="status" aria-live="polite">
+                          {tourStatus === 'completed' ? '導覽完成' : TOUR_MODE_LABELS[tourMode]}
+                        </span>
+                        <strong>{Math.round(tourProgress * 100)}%</strong>
+                      </div>
+                      <div className="route-tour-controls">
+                        <button
+                          type="button"
+                          className="route-tour-primary"
+                          onClick={tourStatus === 'running' ? pauseRouteTour : startRouteTour}
+                        >
+                          {tourStatus === 'running' && '暫停'}
+                          {tourStatus === 'paused' && '繼續'}
+                          {tourStatus === 'completed' && '重新播放'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => seekRouteTour(tourElapsedRef.current - 10_000)}
+                          aria-label="往後 10 秒"
+                        >−10秒</button>
+                        <input
+                          className="route-tour-scrubber"
+                          type="range"
+                          min="0"
+                          max="1000"
+                          value={Math.round(tourProgress * 1000)}
+                          onPointerDown={() => {
+                            if (tourStatus === 'running') pauseRouteTour()
+                          }}
+                          onKeyDown={() => {
+                            if (tourStatus === 'running') pauseRouteTour()
+                          }}
+                          onChange={event => {
+                            const timeline = tourTimelineRef.current
+                            if (timeline) seekRouteTour(Number(event.currentTarget.value) / 1000 * timeline.durationMs)
+                          }}
+                          aria-label="導覽進度"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => seekRouteTour(tourElapsedRef.current + 10_000)}
+                          aria-label="往前 10 秒"
+                        >+10秒</button>
+                        <select
+                          value={tourSpeed}
+                          onChange={event => changeTourSpeed(Number(event.currentTarget.value))}
+                          aria-label="播放速度"
+                        >
+                          {TOUR_SPEEDS.map(speed => (
+                            <option key={speed} value={speed}>{speed}×</option>
+                          ))}
+                        </select>
+                        {(tourStatus === 'running' || tourStatus === 'paused') && (
+                          <button type="button" onClick={stopRouteTour}>結束</button>
+                        )}
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
             </main>

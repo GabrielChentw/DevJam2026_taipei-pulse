@@ -24,6 +24,10 @@ class Confidence(str, Enum):
 class GeometryPrecision(str, Enum):
     """路段幾何的可信度。前端據此決定要不要在畫面上標註『示意路線』。"""
 
+    # Google Routes API WALK mode returned a road/path-network polyline.
+    # This is more faithful than endpoint interpolation, but not a guarantee of
+    # sidewalk or wheelchair accessibility.
+    ROAD_SNAPPED = "road_snapped"
     # 端點錨定在有座標依據的地點（車站、手動標定的站牌/入口），
     # 但點與點之間是直線，不是真實道路或軌道 shape。
     APPROXIMATE = "approximate"
@@ -89,7 +93,7 @@ class Warning_(BaseModel):
 
 
 class ScoreBreakdown(BaseModel):
-    """分數組成。攤開來讓使用者和評審都能看懂排序理由。"""
+    """分數組成。保留供除錯日誌與內部檢核使用。"""
 
     feature: str
     raw_value: float
