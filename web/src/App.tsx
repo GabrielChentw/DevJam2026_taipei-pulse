@@ -114,6 +114,7 @@ export default function App() {
   const [phase, setPhase]               = useState<AppPhase>('chat')
   const [mode, setMode]                 = useState<AccessibilityMode>('general')
   const [dark, setDark]                 = useState(false)
+  const [mapNightMode, setMapNightMode] = useState(false)
   const [speechRate, setSpeechRate]     = useState(getSpeechRate)
   const [speechAutoPlay, setSpeechAutoPlay] = useState(
     () => window.localStorage.getItem('taipei-pulse-speech-auto-play') !== 'false',
@@ -730,7 +731,11 @@ export default function App() {
             </header>
 
             <main className="app-body">
-              <Map3D onReady={handleMapReady} onStatusChange={setMapStatus} />
+              <Map3D
+                nightMode={mapNightMode}
+                onReady={handleMapReady}
+                onStatusChange={setMapStatus}
+              />
               {selectedRoute && (
                 <div className="route-map-legend" aria-label="地圖路線圖例">
                   <strong>{selectedRoute.label}</strong>
@@ -918,6 +923,16 @@ export default function App() {
               ))}
               <button type="button" onClick={orbit} disabled={mapStatus.kind !== 'ready' || tourStatus === 'running'}>
                 環繞一圈
+              </button>
+              <button
+                type="button"
+                className={`map-theme-btn${mapNightMode ? ' is-active' : ''}`}
+                onClick={() => setMapNightMode(value => !value)}
+                aria-pressed={mapNightMode}
+                title="切換 3D 地圖日夜顯示"
+              >
+                <span aria-hidden="true">{mapNightMode ? '☾' : '☀'}</span>
+                {mapNightMode ? '夜間' : '日間'}
               </button>
               <button
                 type="button"
