@@ -1,14 +1,10 @@
-import type { GeometryPrecision, LatLngPoint } from './types/api'
+import type { GeometryPrecision, LatLngPoint as ApiLatLngPoint } from './types/api'
 
 export type AccessibilityMode = 'general' | 'visual' | 'wheelchair' | 'elderly'
 export type AppPhase = 'chat' | 'map'
 
-/** 一個座標點，供地圖畫線與模擬動畫使用。與後端 AnnotatedLeg.path 對齊。 */
-export interface LatLngPoint {
-  lat: number
-  lng: number
-  altitude?: number | null
-}
+/** 一個座標點，供地圖畫線與導覽動畫使用。與後端 AnnotatedLeg.path 對齊。 */
+export type LatLngPoint = ApiLatLngPoint
 
 export interface RouteStep {
   type: 'walk' | 'mrt' | 'bus'

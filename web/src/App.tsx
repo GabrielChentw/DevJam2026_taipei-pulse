@@ -306,7 +306,6 @@ export default function App() {
   // Map ready: 添加捷運站標記
   const handleMapReady = useCallback((map: Map3DElementLike, lib: Maps3dLibrary) => {
     mapRef.current = map
-    maps3dLibRef.current = lib
     const { Marker3DElement, AltitudeMode } = lib
     for (const station of BANNAN_CORRIDOR) {
       const marker = new Marker3DElement({
@@ -388,41 +387,12 @@ export default function App() {
     }, 260)
   }
 
-  // 返回對話：順手停掉正在跑的模擬，避免切回對話後鏡頭還在背景亂飛
+  // 返回對話：停掉正在跑的導覽，避免切回對話後鏡頭仍在背景移動
   const handleBackToChat = () => {
     stopRouteTour()
     setTransitioning(true)
     setTimeout(() => { setPhase('chat'); setTransitioning(false) }, 220)
   }
-
-  // 畫出選定路線的靜態路徑（進地圖畫面、或換了選定路線時都要重畫）
-  useEffect(() => {
-    if (phase !== 'map' || !selectedRoute || !mapRef.current || !maps3dLibRef.current) return
-
-    simulationRef.current?.destroy()
-    simulationRef.current = createRouteSimulation(mapRef.current, maps3dLibRef.current, selectedRoute)
-
-    return () => {
-      simulationRef.current?.destroy()
-      simulationRef.current = null
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, selectedRoute, mapStatus.kind])
-
-  const startSimulation = useCallback(() => {
-    if (!simulationRef.current) return
-    setSimActive(true)
-    simulationRef.current.play({
-      onLegStart: (step: RouteStep) => setSimLegLabel(`${step.description}（${step.duration} 分）`),
-      onFinish: () => { setSimActive(false); setSimLegLabel(null) },
-    })
-  }, [])
-
-  const stopSimulation = useCallback(() => {
-    simulationRef.current?.stop()
-    setSimActive(false)
-    setSimLegLabel(null)
-  }, [])
 
   // 步驟切換 → 飛到對應站點
   // 同學的相機控制（完整保留）
@@ -664,32 +634,16 @@ export default function App() {
                   key={preset.id}
                   type="button"
                   onClick={() => flyTo(preset)}
-                  disabled={mapStatus.kind !== 'ready' || simActive}
+                  disabled={mapStatus.kind !== 'ready' || tourStatus === 'running'}
                   aria-pressed={activePreset === preset.id}
                   className={activePreset === preset.id ? 'is-active' : undefined}
                 >
                   {preset.label}
                 </button>
               ))}
-              <button type="button" onClick={orbit} disabled={mapStatus.kind !== 'ready' || simActive}>
+              <button type="button" onClick={orbit} disabled={mapStatus.kind !== 'ready' || tourStatus === 'running'}>
                 環繞一圈
               </button>
-              {selectedRoute && (
-                simActive ? (
-                  <button type="button" onClick={stopSimulation} className="sim-btn is-active">
-                    ■ 停止模擬
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={startSimulation}
-                    disabled={mapStatus.kind !== 'ready'}
-                    className="sim-btn"
-                  >
-                    ▶ 開始模擬（{selectedRoute.label}）
-                  </button>
-                )
-              )}
               <button
                 type="button"
                 onClick={handleBackToChat}

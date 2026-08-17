@@ -48,7 +48,7 @@
 | 後端 | FastAPI（部署目標 Cloud Run） |
 | Agent | Gemini + `google-genai` 自動 function calling |
 | 資料庫 | Firestore（一日版先用 repo 內的 JSON 種子資料）|
-| 路線候選 | repo 內 JSON 離線候選（Google Routes API 為後續規劃） |
+| 路線候選 | repo 內 JSON 離線候選 + Google Routes API 步行幾何（無金鑰時 fallback） |
 
 引擎寫在 Python 而不是前端 TypeScript，是因為 **agent 必須呼叫它**。目前直接使用
 `google-genai` 把既有引擎包成工具；若引擎放在前端，就得維護兩份規劃邏輯。
@@ -149,8 +149,8 @@ cmd /c "npm run dev"
 ```
 
 開 <http://localhost:5173>，會先看到對話與路線比較畫面。完成規劃後可選擇路線進入
-3D 地圖，查看板南線七個車站標記、路線疊圖與相機定位；按「開始模擬」會依序掃過
-各路段，公車路段另有移動標記與跟拍鏡頭。
+3D 地圖，查看板南線七個車站標記、分色路線與相機定位；按「開始導覽」會沿完整
+路線移動，並可切換路段、暫停、快轉、拖曳進度與調整播放速度。
 
 > **Windows 注意**：必須用 `cmd /c` 前綴，否則 PowerShell 的執行原則會擋住 npm。
 > 原因與永久解法見 [`docs/README.md`](docs/README.md#windows-上的注意事項)。
@@ -174,6 +174,7 @@ api/
       candidates.json       離線候選路線
     engine/
       annotate.py           leg -> 客觀特徵。完全不知道障礙類型的存在
+      routes_geometry.py    Routes API 步行幾何與離線 fallback
       rules.py              硬條件解譯器，含資料缺漏政策
       score.py              加權排序，保留完整 breakdown
       plan.py               組裝與解釋文字生成
@@ -186,7 +187,7 @@ web/
   src/
     lib/googleMaps.ts       Maps API 載入器 + 錯誤攔截
     lib/api.ts              FastAPI 前端封裝
-    lib/routeSimulation.ts  3D 路線繪製、逐段相機移動與公車跟拍
+    lib/routeTour.ts        完整路線導覽時間軸、位置與鏡頭方向計算
     components/ChatPanel.tsx 對話、語音輸入與朗讀、mock 降級
     components/RoutePanel.tsx 可行與排除路線的比較介面
     components/Map3D.tsx    3D 地圖元件
@@ -247,15 +248,15 @@ Agent 的 `/api/chat` 說明（`CameraCommand` 怎麼轉成相機動作），以
 - [x] 前端接上 `/api/chat`，顯示 agent 回覆與完整規劃結果
 - [x] 路線比較介面（可行與被排除路線、推薦理由、逐段資訊）
 - [x] 3D 地圖疊加選定路線，依步行／捷運／公車分色
-- [x] 路線逐段模擬與公車移動標記／跟拍鏡頭
+- [x] 3D 路線導覽（路段切換、暫停／續播、快轉、進度拖曳、倍速與跟拍鏡頭）
 - [x] 語音輸入、回覆朗讀、亮暗色與視障高對比模式
 
 ### Demo 已知限制
 
 - 只有「台北車站 → 台北市政府」這一組起終點有候選路線；反向與其他地點尚未支援。
-- 17 個 leg 都有座標，但目前是端點錨定後的近似直線（`geometry_precision: approximate`），
-  不是實際道路、軌道或公車 shape。
-- 公車動畫時間為 demo 固定秒數，不代表真實車程；步行與捷運段目前只有鏡頭掃過，沒有車輛標記。
+- 17 個 leg 都有離線座標；設定 `GOOGLE_ROUTES_API_KEY` 後，步行段會取得道路貼合幾何
+  （`road_snapped`），未設定或 API 失敗則使用端點近似線。捷運與公車仍是示意 shape。
+- 導覽會把完整路程壓縮到約 28–70 秒以利 demo，不代表真實車程，目前也沒有車輛模型。
 - 對話 session 存在 FastAPI process 的記憶體中，服務重啟後不保留，也不適合多 instance 部署。
 - 前端遇到任何 `/api/chat` 錯誤都會靜默切到 mock；正式展示前應確認後端 log 的工具呼叫紀錄。
 - 後端尚無身分驗證與速率限制，只適合本機開發與受控 demo，不應直接公開上線。
