@@ -10,9 +10,15 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+
+# Resolve api/.env from this file so local startup works from any directory.
+# Cloud Run environment variables still win because dotenv does not override.
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
 from .agent import chat as agent_chat
 from .data_sources.accessibility import load_accessibility_snapshot
@@ -32,10 +38,6 @@ from .models import (
     UserPreferences,
     UserPreferencesSnapshot,
 )
-
-# chat.py 在第一次呼叫時才延遲讀取 os.environ["GEMINI_API_KEY"]，
-# 所以這裡放在 import 之後也沒問題，只要在第一個 request 進來之前執行過即可。
-load_dotenv()
 
 app = FastAPI(
     title="Taipei Pulse API",
@@ -180,6 +182,8 @@ def post_chat(request: ChatRequest) -> ChatResponse:
         )
     except agent_chat.AgentUnavailableError as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
+    except agent_chat.AgentRequestError as error:
+        raise HTTPException(status_code=502, detail=str(error)) from error
 
     return ChatResponse(
         session_id=request.session_id,

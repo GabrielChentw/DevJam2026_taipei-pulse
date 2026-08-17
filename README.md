@@ -141,9 +141,10 @@ API 文件在 <http://127.0.0.1:8000/docs>。核心端點：
 
 3. **前端**：`web/src/lib/api.ts` 的 `sendChatMessage()`。
 
-前端會優先呼叫後端 `/api/chat`。若後端離線、金鑰未設定或 API 發生其他錯誤，
-目前會自動改用 mock 對話與假路線，確保畫面仍可展示。這個降級不會在 UI 顯示，
-因此驗證真實 agent 時請同時查看後端 log，確認出現 `[chat] ... tool_calls=...`。
+前端會優先呼叫後端 `/api/chat`。Gemini 暫時失敗但後端仍在線時，前端會改呼叫
+不依賴 Gemini 的 `/api/plan`，保留完整路線 path 與導覽功能；只有整個後端離線時
+才使用含近似座標的靜態 mock。驗證真實 agent 時可查看後端 log 是否出現
+`[chat] ... tool_calls=...`。
 
 **判斷測試結果的標準**：`reply` 裡的數字（步行公尺、分鐘、坡度）要跟種子
 資料（`api/app/data/candidates.json`）對得上；`plan` 若非 null，`feasible`
@@ -296,7 +297,7 @@ Agent 的 `/api/chat` 說明（`CameraCommand` 怎麼轉成相機動作），以
 - 捷運物件使用 TDX `StationTimeTable` 在站間內插，不是列車 GPS；公車背景物件使用 TDX 班距沿官方 Shape
   內插。介面會分別顯示「TDX 時刻表推算／班距推算」，凌晨無可呈現班次時改用 14:10 時刻表回放。
 - 使用者偏好可存 Firestore，但對話 session 仍存在 FastAPI process 的記憶體中，服務重啟後不保留，也不適合多 instance 部署。
-- 前端遇到任何 `/api/chat` 錯誤都會靜默切到 mock；正式展示前應確認後端 log 的工具呼叫紀錄。
+- `/api/chat` 失敗時會先降級到 `/api/plan`；整個後端離線時才使用含近似座標的靜態 mock。
 - 後端尚無身分驗證與速率限制，只適合本機開發與受控 demo，不應直接公開上線。
 
 ### 引擎目前的實際輸出

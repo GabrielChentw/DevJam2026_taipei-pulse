@@ -24,8 +24,9 @@ wrapper 一樣要讓 google-genai 讀到真正的型別物件，不能是字串�
 import os
 from dataclasses import dataclass, field
 
+import httpx
 from google import genai
-from google.genai import types
+from google.genai import errors, types
 
 from ..models import CameraCommand, ChatMessage, CompareResponse, EvaluatedRoute, PlanResponse
 from .camera import camera_commands_for_plan
@@ -55,10 +56,9 @@ _SYSTEM_INSTRUCTION = """\
   只需說明路線是否適合及實際需要注意的路況。
 """
 
-# gemini-2.5-flash 已對新使用者下架（2026/08 確認，Google 建議改用 Interactions API
-# 或新一代模型）。改用目前 GA 的 gemini-3.6-flash。若之後又下架，
-# 用 TAIPEI_PULSE_MODEL 環境變數覆寫即可，不需要改程式碼。
-_MODEL = os.environ.get("TAIPEI_PULSE_MODEL", "gemini-3.6-flash")
+def _get_model() -> str:
+    """Read lazily so dotenv and Cloud Run env are always honoured."""
+    return os.environ.get("TAIPEI_PULSE_MODEL", "gemini-3.6-flash").strip() or "gemini-3.6-flash"
 
 
 @dataclass
@@ -70,6 +70,10 @@ class _Session:
 
 class AgentUnavailableError(RuntimeError):
     """GEMINI_API_KEY 未設定或 client 初始化失敗時拋出。"""
+
+
+class AgentRequestError(RuntimeError):
+    """Gemini request reached the SDK but could not complete."""
 
 
 _client: genai.Client | None = None
@@ -206,14 +210,25 @@ def send_message(
         {"role": "user", "parts": [{"text": message}]}
     ]
 
-    response = client.models.generate_content(
-        model=_MODEL,
-        contents=contents,
-        config=types.GenerateContentConfig(
-            system_instruction=_SYSTEM_INSTRUCTION,
-            tools=tools_with_capture,
-        ),
-    )
+    model = _get_model()
+    try:
+        response = client.models.generate_content(
+            model=model,
+            contents=contents,
+            config=types.GenerateContentConfig(
+                system_instruction=_SYSTEM_INSTRUCTION,
+                tools=tools_with_capture,
+            ),
+        )
+    except errors.APIError as error:
+        status_code = getattr(error, "code", None) or getattr(error, "status_code", None)
+        if status_code == 404:
+            raise AgentRequestError(
+                f"Gemini 模型 {model} 不可用；請將 TAIPEI_PULSE_MODEL 設為 gemini-3.6-flash。"
+            ) from error
+        raise AgentRequestError(f"Gemini API 暫時無法完成請求（{error.__class__.__name__}）。") from error
+    except httpx.HTTPError as error:
+        raise AgentRequestError("無法連線到 Gemini API，請檢查 Cloud Run 外連網路與 DNS。") from error
 
     reply = response.text or "（沒有取得回應，請再試一次）"
 

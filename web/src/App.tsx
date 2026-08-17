@@ -958,6 +958,10 @@ export default function App() {
     })
   }, [activePreset, stopRouteTour])
 
+  const hasSelectedRouteGeometry = selectedRoute?.steps.some(
+    step => Boolean(step.path && step.path.length > 1),
+  ) ?? false
+
   // ── 渲染 ──────────────────────────────────────────────────────────────────────
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: 'var(--bg-base)', overflow: 'hidden' }}>
@@ -1247,13 +1251,15 @@ export default function App() {
                     <div className="route-tour-intro">
                       <div>
                         <strong>沿路線觀看</strong>
-                        <small>可直接切換行程區段</small>
+                        <small>{hasSelectedRouteGeometry
+                          ? '可直接切換行程區段'
+                          : '此路線缺少導覽座標，請重新產生路線'}</small>
                       </div>
                       <button
                         type="button"
                         className="route-tour-primary route-tour-start"
                         onClick={startRouteTour}
-                        disabled={mapStatus.kind !== 'ready'}
+                        disabled={mapStatus.kind !== 'ready' || !hasSelectedRouteGeometry}
                       >
                         開始導覽
                       </button>

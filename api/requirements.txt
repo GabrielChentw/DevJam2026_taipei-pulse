@@ -2,5 +2,6 @@ fastapi==0.120.4
 uvicorn[standard]==0.38.0
 pydantic==2.12.3
 google-genai==1.28.0
+httpx==0.28.1
 google-cloud-firestore==2.21.0
 python-dotenv==1.1.1

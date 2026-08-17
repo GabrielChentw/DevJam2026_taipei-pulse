@@ -3,20 +3,48 @@ import type { AccessibilityMode, Message, PlannedRoute, RouteStep } from './type
 // ── 路線建構 ──────────────────────────────────────────────────────────────────
 
 function buildRoutes(from: string, to: string, mode: AccessibilityMode, wheelchairType?: string): PlannedRoute[] {
-  const walk = (desc: string, detail: string, min: number, accessible: boolean, elevator?: boolean): RouteStep => ({
+  const walk = (desc: string, detail: string, min: number, accessible: boolean, elevator?: boolean, path?: RouteStep['path']): RouteStep => ({
     type: 'walk', description: desc, detail, duration: min, accessible, hasElevator: elevator,
+    path, geometryPrecision: path ? 'approximate' : 'missing',
   })
-  const mrt = (detail: string, min: number, stationId?: string): RouteStep => ({
+  const mrt = (detail: string, min: number, stationId?: string, path?: RouteStep['path']): RouteStep => ({
     type: 'mrt', description: '搭乘捷運板南線', detail, duration: min,
     accessible: true, hasElevator: true, line: '板南線', stationId,
     transitRouteName: '板南線', transitRouteUid: 'BL', transitDirection: 0,
     boardingStopUid: stationId ?? 'BL12', alightingStopUid: 'BL18',
+    path, geometryPrecision: path ? 'approximate' : 'missing',
   })
-  const bus = (detail: string, min: number, accessible: boolean): RouteStep => ({
+  const bus = (detail: string, min: number, accessible: boolean, path?: RouteStep['path']): RouteStep => ({
     type: 'bus', description: '搭乘信義幹線', detail, duration: min, accessible, line: '信義幹線',
     transitRouteName: '信義幹線', transitRouteUid: 'TPE15708', transitDirection: 1,
     boardingStopUid: 'TPE170429', alightingStopUid: 'TPE29460',
+    path, geometryPrecision: path ? 'approximate' : 'missing',
   })
+
+  // Last-resort geometry for the fixed demo corridor. Normal operation uses
+  // the road/shape paths returned by the deterministic /api/plan endpoint.
+  const mainEntrance = { lat: 25.04695, lng: 121.51635 }
+  const mainStation = { lat: 25.0478, lng: 121.517 }
+  const bannanLine = [
+    mainStation,
+    { lat: 25.0446, lng: 121.5252 },
+    { lat: 25.0424, lng: 121.533 },
+    { lat: 25.0416, lng: 121.5434 },
+    { lat: 25.0416, lng: 121.5497 },
+    { lat: 25.0413, lng: 121.5576 },
+    { lat: 25.041, lng: 121.5679 },
+  ]
+  const cityHall = { lat: 25.03755, lng: 121.56375 }
+  const cityHallWalk = [bannanLine[bannanLine.length - 1], { lat: 25.0398, lng: 121.5662 }, cityHall]
+  const busBoarding = { lat: 25.04575, lng: 121.5182 }
+  const busAlighting = { lat: 25.03385, lng: 121.5648 }
+  const busLine = [
+    busBoarding,
+    { lat: 25.0419, lng: 121.5298 },
+    { lat: 25.0377, lng: 121.5417 },
+    { lat: 25.0339, lng: 121.5528 },
+    busAlighting,
+  ]
 
   const wheelchairNote = wheelchairType === 'electric'
     ? '電動輪椅可直接進入無障礙候車區，車廂設有固定裝置'
@@ -26,9 +54,9 @@ function buildRoutes(from: string, to: string, mode: AccessibilityMode, wheelcha
     id: 'A', label: '路線 A', from, to,
     totalMinutes: 24, segments: 1,
     steps: [
-      walk(`步行至${from}捷運站`, '約 300 公尺，人行道平坦', 5, true, true),
-      mrt(`${from} → ${to}，6 站不換乘`, 15, 'BL12'),
-      walk(`步行至${to}`, '約 200 公尺，地面平坦', 4, true),
+      walk(`步行至${from}捷運站`, '約 300 公尺，人行道平坦', 5, true, true, [mainEntrance, mainStation]),
+      mrt(`${from} → ${to}，6 站不換乘`, 15, 'BL12', bannanLine),
+      walk(`步行至${to}`, '約 200 公尺，地面平坦', 4, true, false, cityHallWalk),
     ],
     fullyAccessible: true,
     excluded: false,
@@ -44,9 +72,9 @@ function buildRoutes(from: string, to: string, mode: AccessibilityMode, wheelcha
     id: 'B', label: '路線 B', from, to,
     totalMinutes: 34, segments: 2,
     steps: [
-      walk('步行至公車站', '約 150 公尺，較近', 3, true),
-      bus(`低地板公車・${from} → ${to}`, 25, mode === 'wheelchair'),
-      walk(`步行至${to}`, '約 100 公尺', 6, true),
+      walk('步行至公車站', '約 150 公尺，較近', 3, true, false, [mainEntrance, busBoarding]),
+      bus(`低地板公車・${from} → ${to}`, 25, mode === 'wheelchair', busLine),
+      walk(`步行至${to}`, '約 100 公尺', 6, true, false, [busAlighting, cityHall]),
     ],
     fullyAccessible: mode !== 'visual',
     excluded: false,
@@ -62,9 +90,9 @@ function buildRoutes(from: string, to: string, mode: AccessibilityMode, wheelcha
     id: 'C', label: '路線 C', from, to,
     totalMinutes: 19, segments: 1,
     steps: [
-      walk('步行至忠孝新生站 1 號出口', '約 100 公尺（路程較近）', 2, false),
-      mrt('板南線，僅 4 站', 12, 'BL14'),
-      walk(`步行至${to}`, '約 400 公尺', 5, true),
+      walk('步行至忠孝新生站 1 號出口', '約 100 公尺（路程較近）', 2, false, false, [mainEntrance, bannanLine[2]]),
+      mrt('板南線，僅 4 站', 12, 'BL14', bannanLine.slice(2)),
+      walk(`步行至${to}`, '約 400 公尺', 5, true, false, cityHallWalk),
     ],
     fullyAccessible: false,
     excluded: true,

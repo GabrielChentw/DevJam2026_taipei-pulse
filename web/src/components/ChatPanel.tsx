@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import type { AccessibilityMode, Message } from '../types'
-import { sendChatMessage } from '../lib/api'
+import { planRoute, sendChatMessage } from '../lib/api'
 import { getMockAgentResponse, planToRoutes, sanitizeUserFacingScore, INITIAL_QUICK_ACTIONS } from '../mockData'
 import type { AgentResponse } from '../mockData'
 import { getAgentSpeechSummary, speak } from '../lib/speech'
@@ -15,6 +15,13 @@ interface Props {
   onAddMessage: (msg: Message) => void
   onAgentResponse: (res: AgentResponse) => void
   speechAutoPlay: boolean
+}
+
+const PROFILE_BY_MODE: Record<AccessibilityMode, string> = {
+  general: 'wheelchair',
+  visual: 'low_vision',
+  wheelchair: 'wheelchair',
+  elderly: 'elderly',
 }
 
 function ChatAvatar({ role }: { role: Message['role'] }) {
@@ -143,22 +150,39 @@ export default function ChatPanel({ mode, messages, onAddMessage, onAgentRespons
 
       onAgentResponse(agentRes)
     } catch {
-      // ── 後端不在線 → Mock 降級 ──────────────────────────────────────────────
-      setTimeout(() => {
-        const res = getMockAgentResponse(messages, text.trim(), mode)
-        setTyping(false)
-        const agentMsg: Message = {
-          id: (Date.now() + 1).toString(),
-          role: 'agent',
-          content: res.content,
-          timestamp: new Date(),
+      // Gemini 不可用時先保留對話狀態，再向不依賴 Gemini 的規劃引擎
+      // 取得完整 path。只有整個後端都離線時才使用靜態 mock。
+      let res = getMockAgentResponse(messages, text.trim(), mode)
+      if (res.routesReady && res.from && res.to) {
+        try {
+          const fallbackMode = res.detectedMode ?? mode
+          const plan = await planRoute({
+            origin: res.from,
+            destination: res.to,
+            profile_id: PROFILE_BY_MODE[fallbackMode],
+          })
+          res = {
+            ...res,
+            routes: planToRoutes(plan, plan.origin, plan.destination),
+            profileDetail: plan.profile_label,
+          }
+        } catch {
+          // Static mock remains the final offline fallback.
         }
-        onAddMessage(agentMsg)
-        if (speechAutoPlay && !res.routesReady) {
-          speak(getAgentSpeechSummary(res.content))
-        }
-        onAgentResponse(res)
-      }, 600 + Math.random() * 500)
+      }
+
+      setTyping(false)
+      const agentMsg: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'agent',
+        content: res.content,
+        timestamp: new Date(),
+      }
+      onAddMessage(agentMsg)
+      if (speechAutoPlay && !res.routesReady) {
+        speak(getAgentSpeechSummary(res.content))
+      }
+      onAgentResponse(res)
     }
   }, [messages, mode, typing, onAddMessage, onAgentResponse, speechAutoPlay])
 
