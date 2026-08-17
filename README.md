@@ -99,6 +99,37 @@ API 文件在 <http://127.0.0.1:8000/docs>。核心端點：
 的自動 function calling（把既有引擎包成 Python 函式當 tools 傳入），理由與
 取捨寫在 `api/app/agent/chat.py` 開頭的註解。
 
+### 測試 Agent 對話
+
+三種方式，由簡到繁：
+
+1. **瀏覽器互動介面**：後端跑起來後開 <http://127.0.0.1:8000/docs>，找
+   `POST /api/chat`，Try it out，貼：
+   ```json
+   { "session_id": "test1", "message": "我坐輪椅，要從台北車站到市政府" }
+   ```
+   同一個 `session_id` 可以連續送新的 `message` 保留對話上下文。
+
+2. **測試腳本**（`scripts/test-chat.ps1`）：
+   ```powershell
+   # 單句
+   powershell -ExecutionPolicy Bypass -File scripts\test-chat.ps1 -Message "your text"
+   # 連續對話
+   powershell -ExecutionPolicy Bypass -File scripts\test-chat.ps1 -Interactive
+   ```
+   會把 `reply`、`plan` 的 feasible/excluded 數量、`camera_commands` 整理成
+   人類看得懂的格式印出來，不用自己讀原始 JSON。
+
+3. **前端**：`web/src/lib/api.ts` 的 `sendChatMessage()`。
+
+**判斷測試結果的標準**：`reply` 裡的數字（步行公尺、分鐘、坡度）要跟種子
+資料（`api/app/data/candidates.json`）對得上；`plan` 若非 null，`feasible`
+應至少有 1 條。若 `reply` 提到種子資料裡不存在的數字，代表工具呼叫失敗、
+模型在編答案——回報這個情況，不要當成正常結果。
+
+> 若 `scripts/test-chat.ps1` 遇到中文輸出變成亂碼：那是終端機顯示編碼問題，
+> 資料本身沒壞，用瀏覽器 `/docs` 介面看原始 JSON 更準確。
+
 > **安全性**：後端目前**沒有身分驗證**，僅供本機開發與 demo。部署到公開網址前必須
 > 加上驗證與速率限制 —— 屆時它會開始接收使用者的無障礙需求，那是敏感個人資料。
 
