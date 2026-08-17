@@ -26,6 +26,15 @@ export interface RouteTourFrame {
   finished: boolean
 }
 
+export interface FirstNavigationCue {
+  position: LatLngPoint
+  heading: number
+  stepIndex: number
+  description: string
+  detail?: string
+  durationMinutes: number
+}
+
 interface LocatedTourPoint {
   edge: TourEdge
   position: LatLngPoint
@@ -142,6 +151,28 @@ export function routeTourFrameAt(timeline: RouteTourTimeline, elapsedMs: number)
     stepIndex: current.edge.stepIndex,
     progress: timeline.durationMs === 0 ? 1 : clamped / timeline.durationMs,
     finished: clamped >= timeline.durationMs,
+  }
+}
+
+/**
+ * Build the first instruction shown after the cinematic route preview.
+ * This intentionally returns a fixed starting pose only: live GPS following
+ * belongs to a later MVP stage.
+ */
+export function buildFirstNavigationCue(route: PlannedRoute): FirstNavigationCue | null {
+  const timeline = buildRouteTourTimeline(route)
+  const firstWalkingEdge = timeline?.edges.find(edge => edge.mode === 'walk')
+  if (!timeline || !firstWalkingEdge) return null
+
+  const step = route.steps[firstWalkingEdge.stepIndex]
+  const frame = routeTourFrameAt(timeline, firstWalkingEdge.startsAtMs + 1)
+  return {
+    position: firstWalkingEdge.from,
+    heading: frame.heading,
+    stepIndex: firstWalkingEdge.stepIndex,
+    description: step.description,
+    detail: step.detail,
+    durationMinutes: step.duration,
   }
 }
 

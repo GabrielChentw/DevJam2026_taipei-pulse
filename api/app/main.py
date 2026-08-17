@@ -14,6 +14,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from .agent import chat as agent_chat
+from .data_sources.accessibility import load_accessibility_snapshot
 from .engine import plan as planner
 from .models import ChatRequest, ChatResponse, CompareResponse, PlanRequest, PlanResponse, ProfileSummary
 
@@ -55,6 +56,12 @@ def get_profiles() -> list[ProfileSummary]:
 def get_corridor() -> dict:
     """走廊的無障礙種子資料，含每筆設施的 confidence。"""
     return planner.load_corridor()
+
+
+@app.get("/api/accessibility")
+def get_accessibility(refresh: bool = False) -> dict:
+    """官方無障礙設施快照；來源失效時自動回退到 repo 內已驗證資料。"""
+    return load_accessibility_snapshot(force_refresh=refresh)
 
 
 @app.post("/api/plan", response_model=PlanResponse)

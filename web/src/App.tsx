@@ -7,15 +7,17 @@ import SosButton from './components/SosButton'
 import { BANNAN_CORRIDOR, CAMERA_PRESETS } from './data/corridor'
 import type { Map3DElementLike, Maps3dLibrary } from './lib/googleMaps'
 import {
+  buildFirstNavigationCue,
   buildRouteTourTimeline,
   routeTourFrameAt,
   smoothHeading,
+  type FirstNavigationCue,
   type RouteTourTimeline,
   type TourMode,
 } from './lib/routeTour'
 import type { AccessibilityMode, AppPhase, Message, PlannedRoute } from './types'
 import type { AgentResponse } from './mockData'
-import { getSpeechRate, setSpeechRate as persistSpeechRate, SPEECH_RATES, stopSpeaking } from './lib/speech'
+import { getSpeechRate, setSpeechRate as persistSpeechRate, SPEECH_RATES, speak, stopSpeaking } from './lib/speech'
 
 const ROUTE_COLORS: Record<PlannedRoute['steps'][number]['type'], string> = {
   walk: '#34A853',
@@ -51,6 +53,9 @@ const TOUR_CAMERA: Record<TourMode, { altitude: number; range: number; tilt: num
 }
 
 const TOUR_WALK_ENTRY_CAMERA = { altitude: 38, range: 74, tilt: 68, fov: 70 }
+// Taipei Main Station's photogrammetry is tall and irregular. Stay close enough
+// to read the first turn while keeping the camera above the roof mesh.
+const FIRST_STEP_CAMERA = { altitude: 6, range: 140, tilt: 70, fov: 72 }
 
 function cameraForTourFrame(mode: TourMode, stepIndex: number) {
   // The first walking leg starts beside Taipei Main Station's large roof mesh;
@@ -107,16 +112,19 @@ export default function App() {
   const tourTimelineRef = useRef<RouteTourTimeline | null>(null)
   const tourFrameRef = useRef<number | null>(null)
   const tourLaunchTimeoutRef = useRef<number | null>(null)
+  const tourReturnTimeoutRef = useRef<number | null>(null)
   const tourLastFrameAtRef = useRef(0)
   const tourElapsedRef = useRef(0)
   const tourSpeedRef = useRef(1)
   const tourHeadingRef = useRef(0)
   const tourLastUiUpdateRef = useRef(0)
-  const [tourStatus, setTourStatus] = useState<'idle' | 'running' | 'paused' | 'completed'>('idle')
+  const [tourStatus, setTourStatus] = useState<'idle' | 'running' | 'paused' | 'returning' | 'navigation-ready'>('idle')
   const [tourProgress, setTourProgress] = useState(0)
   const [tourMode, setTourMode] = useState<TourMode>('walk')
   const [tourStepIndex, setTourStepIndex] = useState(0)
   const [tourSpeed, setTourSpeed] = useState(1)
+  const [navigationCue, setNavigationCue] = useState<FirstNavigationCue | null>(null)
+  const [activePreset, setActivePreset] = useState<string>('cityHall')
 
   const changeSpeechRate = (rate: number) => {
     stopSpeaking()
@@ -132,6 +140,10 @@ export default function App() {
       window.clearTimeout(tourLaunchTimeoutRef.current)
       tourLaunchTimeoutRef.current = null
     }
+    if (tourReturnTimeoutRef.current !== null) {
+      window.clearTimeout(tourReturnTimeoutRef.current)
+      tourReturnTimeoutRef.current = null
+    }
   }, [])
 
   const stopRouteTour = useCallback(() => {
@@ -142,7 +154,43 @@ export default function App() {
     tourLastFrameAtRef.current = 0
     setTourProgress(0)
     setTourStepIndex(0)
+    setNavigationCue(null)
     setTourStatus('idle')
+  }, [cancelTourTimers])
+
+  const returnToFirstNavigationStep = useCallback(() => {
+    const map = mapRef.current
+    const route = selectedRouteRef.current
+    if (!map || !route) return
+
+    const cue = buildFirstNavigationCue(route)
+    if (!cue) {
+      setTourStatus('idle')
+      return
+    }
+
+    cancelTourTimers()
+    map.stopCameraAnimation()
+    map.fov = FIRST_STEP_CAMERA.fov
+    setNavigationCue(cue)
+    setTourProgress(1)
+    setTourMode('walk')
+    setTourStepIndex(cue.stepIndex)
+    setActivePreset('mainStation')
+    setTourStatus('returning')
+    map.flyCameraTo({
+      endCamera: {
+        center: { ...cue.position, altitude: FIRST_STEP_CAMERA.altitude },
+        range: FIRST_STEP_CAMERA.range,
+        tilt: FIRST_STEP_CAMERA.tilt,
+        heading: cue.heading,
+      },
+      durationMillis: 1800,
+    })
+    tourReturnTimeoutRef.current = window.setTimeout(() => {
+      tourReturnTimeoutRef.current = null
+      setTourStatus('navigation-ready')
+    }, 1850)
   }, [cancelTourTimers])
 
   const animateRouteTour = useCallback((now: number) => {
@@ -182,11 +230,11 @@ export default function App() {
 
     if (frame.finished) {
       tourFrameRef.current = null
-      setTourStatus('completed')
+      returnToFirstNavigationStep()
       return
     }
     tourFrameRef.current = window.requestAnimationFrame(animateRouteTour)
-  }, [])
+  }, [returnToFirstNavigationStep])
 
   const startRouteTour = useCallback(() => {
     const map = mapRef.current
@@ -208,6 +256,7 @@ export default function App() {
     setTourProgress(0)
     setTourMode(timeline.edges[0].mode)
     setTourStepIndex(timeline.edges[0].stepIndex)
+    setNavigationCue(null)
     setTourStatus('running')
 
     const firstFrame = routeTourFrameAt(timeline, 0)
@@ -263,12 +312,12 @@ export default function App() {
     setTourStepIndex(frame.stepIndex)
 
     if (frame.finished) {
-      cancelTourTimers()
-      setTourStatus('completed')
-    } else if (tourStatus === 'completed') {
+      returnToFirstNavigationStep()
+    } else if (tourStatus === 'navigation-ready' || tourStatus === 'returning') {
+      setNavigationCue(null)
       setTourStatus('paused')
     }
-  }, [cancelTourTimers, tourStatus])
+  }, [returnToFirstNavigationStep, tourStatus])
 
   const jumpToRouteStep = useCallback((stepIndex: number) => {
     const route = selectedRouteRef.current
@@ -396,8 +445,6 @@ export default function App() {
 
   // 步驟切換 → 飛到對應站點
   // 同學的相機控制（完整保留）
-  const [activePreset, setActivePreset] = useState<string>('cityHall')
-
   const flyTo = useCallback((preset: (typeof CAMERA_PRESETS)[number]) => {
     if (!mapRef.current) return
     stopRouteTour()
@@ -531,7 +578,7 @@ export default function App() {
                 </div>
               )}
               {selectedRoute && (
-                <div className={`route-tour-hud route-tour-mode-${tourMode}${tourStatus === 'idle' ? ' is-idle' : ''}`}>
+                <div className={`route-tour-hud route-tour-mode-${tourMode}${tourStatus === 'idle' ? ' is-idle' : ''}${tourStatus === 'navigation-ready' ? ' is-navigation-ready' : ''}`}>
                   <div className="route-tour-steps" aria-label="切換路線區段">
                     {selectedRoute.steps.map((step, stepIndex) => (
                       step.path && step.path.length > 1 && (
@@ -563,11 +610,40 @@ export default function App() {
                         開始導覽
                       </button>
                     </div>
+                  ) : tourStatus === 'returning' ? (
+                    <div className="route-tour-returning" role="status" aria-live="polite">
+                      <span className="route-tour-returning-icon" aria-hidden="true">↩</span>
+                      <div>
+                        <strong>預演完成，正在回到出發位置</strong>
+                        <small>接著會顯示第一步步行方向；尚未啟動 GPS 跟隨</small>
+                      </div>
+                    </div>
+                  ) : tourStatus === 'navigation-ready' && navigationCue ? (
+                    <div className="route-navigation-ready" role="status" aria-live="polite">
+                      <div className="route-navigation-eyebrow">輪椅第一段步行 · 導航準備完成</div>
+                      <div className="route-navigation-instruction">
+                        <span className="route-navigation-arrow" aria-hidden="true">↑</span>
+                        <div>
+                          <strong>{navigationCue.description}</strong>
+                          {navigationCue.detail && <small>{navigationCue.detail}</small>}
+                        </div>
+                        <span className="route-navigation-duration">約 {navigationCue.durationMinutes} 分</span>
+                      </div>
+                      <div className="route-navigation-actions">
+                        <button
+                          type="button"
+                          className="route-tour-primary"
+                          onClick={() => speak(`${navigationCue.description}。${navigationCue.detail ?? ''}`, speechRate)}
+                        >朗讀第一步</button>
+                        <button type="button" onClick={startRouteTour}>重新預演</button>
+                      </div>
+                      <small className="route-navigation-gps-note">目前固定在出發點視角，不會追蹤或儲存即時位置。</small>
+                    </div>
                   ) : (
                     <>
                       <div className="route-tour-summary">
                         <span role="status" aria-live="polite">
-                          {tourStatus === 'completed' ? '導覽完成' : TOUR_MODE_LABELS[tourMode]}
+                          {TOUR_MODE_LABELS[tourMode]}
                         </span>
                         <strong>{Math.round(tourProgress * 100)}%</strong>
                       </div>
@@ -579,7 +655,6 @@ export default function App() {
                         >
                           {tourStatus === 'running' && '暫停'}
                           {tourStatus === 'paused' && '繼續'}
-                          {tourStatus === 'completed' && '重新播放'}
                         </button>
                         <button
                           type="button"

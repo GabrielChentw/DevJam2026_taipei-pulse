@@ -1,0 +1,100 @@
+{
+  "schema_version": 1,
+  "data_mode": "fallback",
+  "snapshot_date": "2026-08-17",
+  "corridor_bbox": { "south": 25.03, "west": 121.50, "north": 25.06, "east": 121.58 },
+  "facilities": [
+    {
+      "id": "fallback-metro-elevator-41",
+      "kind": "metro_elevator",
+      "name": "台北車站出口電梯1",
+      "exit": "M2",
+      "position": { "lat": 25.0482356, "lng": 121.5186428 },
+      "confidence": "verified",
+      "source_id": "metro-elevator-gps"
+    },
+    {
+      "id": "fallback-metro-elevator-42",
+      "kind": "metro_elevator",
+      "name": "台北車站出口電梯2",
+      "exit": "M4",
+      "position": { "lat": 25.0463906, "lng": 121.5172729 },
+      "confidence": "verified",
+      "source_id": "metro-elevator-gps"
+    },
+    {
+      "id": "fallback-metro-elevator-172",
+      "kind": "metro_elevator",
+      "name": "市政府站出口電梯",
+      "exit": "出口2",
+      "position": { "lat": 25.040936, "lng": 121.565245 },
+      "confidence": "verified",
+      "source_id": "metro-elevator-gps"
+    },
+    {
+      "id": "fallback-wheelroute-7-main-m4",
+      "kind": "accessible_entrance",
+      "name": "台北車站M4-M4",
+      "position": { "lat": 25.046485, "lng": 121.517345 },
+      "width_cm": null,
+      "slope_percent": null,
+      "confidence": "verified",
+      "source_id": "wheelroute-7"
+    },
+    {
+      "id": "fallback-wheelroute-7-main-m2",
+      "kind": "accessible_entrance",
+      "name": "台北車站M2-M2",
+      "position": { "lat": 25.048159, "lng": 121.51908 },
+      "width_cm": null,
+      "slope_percent": null,
+      "confidence": "verified",
+      "source_id": "wheelroute-7"
+    },
+    {
+      "id": "fallback-wheelroute-7-cityhall-2",
+      "kind": "accessible_entrance",
+      "name": "市政府站出口2-2",
+      "position": { "lat": 25.040971, "lng": 121.565062 },
+      "width_cm": null,
+      "slope_percent": null,
+      "confidence": "verified",
+      "source_id": "wheelroute-7"
+    }
+  ],
+  "outages": [],
+  "sources": [
+    {
+      "id": "wheelroute-1",
+      "label": "輪行臺北：無障礙斜坡道",
+      "page_url": "https://data.taipei/dataset/detail?id=2b58f15a-dec6-4b9d-91be-4eaccfda5ae7",
+      "mode": "fallback",
+      "record_count": 0,
+      "error": null
+    },
+    {
+      "id": "wheelroute-7",
+      "label": "輪行臺北：無障礙出入口",
+      "page_url": "https://data.taipei/dataset/detail?id=2b58f15a-dec6-4b9d-91be-4eaccfda5ae7",
+      "mode": "fallback",
+      "record_count": 3,
+      "error": null
+    },
+    {
+      "id": "metro-elevator-gps",
+      "label": "臺北捷運出入口電梯／坡道 GPS",
+      "page_url": "https://data.taipei/dataset/detail?id=0a3bb422-9eb5-459b-a9d4-138456516183",
+      "mode": "fallback",
+      "record_count": 3,
+      "error": null
+    },
+    {
+      "id": "metro-accessibility-outage",
+      "label": "臺北捷運無障礙設施異常公告",
+      "page_url": "https://data.taipei/dataset/detail?id=d884a9c6-f86c-4854-8da7-e6516ddbe612",
+      "mode": "fallback",
+      "record_count": 0,
+      "error": null
+    }
+  ]
+}

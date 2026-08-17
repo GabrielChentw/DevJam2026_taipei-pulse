@@ -326,6 +326,10 @@ body {
   padding: 11px;
 }
 
+.route-tour-hud.is-navigation-ready {
+  width: min(470px, calc(100% - 36px));
+}
+
 .route-tour-steps {
   display: flex;
   gap: 6px;
@@ -398,6 +402,112 @@ body {
 .route-tour-intro small {
   color: var(--map-muted);
   font-size: 10.5px;
+}
+
+.route-tour-returning {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 4px 3px;
+}
+
+.route-tour-returning-icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  place-items: center;
+  border-radius: 50%;
+  color: #8fe59f;
+  background: rgba(52, 168, 83, 0.2);
+  font-size: 20px;
+}
+
+.route-tour-returning div,
+.route-navigation-instruction > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.route-tour-returning small,
+.route-navigation-instruction small,
+.route-navigation-gps-note {
+  color: var(--map-muted);
+}
+
+.route-navigation-ready {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.route-navigation-eyebrow {
+  color: #8fe59f;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .02em;
+}
+
+.route-navigation-instruction {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  padding: 9px;
+  border: 1px solid rgba(82, 210, 115, 0.48);
+  border-radius: 10px;
+  background: rgba(52, 168, 83, 0.15);
+}
+
+.route-navigation-arrow {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border-radius: 9px;
+  color: #fff;
+  background: #34A853;
+  font-size: 25px;
+  font-weight: 700;
+}
+
+.route-navigation-instruction strong {
+  font-size: 13px;
+}
+
+.route-navigation-instruction small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.route-navigation-duration {
+  color: #8fe59f;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.route-navigation-actions {
+  display: flex;
+  gap: 7px;
+}
+
+.route-navigation-actions button {
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 8px;
+  color: var(--map-text);
+  background: rgba(255, 255, 255, 0.1);
+  cursor: pointer;
+  font: inherit;
+}
+
+.route-navigation-gps-note {
+  font-size: 10px;
 }
 
 .route-tour-summary,
