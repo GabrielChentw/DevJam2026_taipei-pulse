@@ -5,6 +5,17 @@ docs/build/
 *.log
 *.tsbuildinfo
 
+# 診斷腳本的暫存輸出
+probe.txt
+audit.txt
+keysync.txt
+gpu.txt
+chromegpu*.txt
+verify.txt
+apitest.txt
+build-out.txt
+COMMIT_MSG.tmp
+
 # env
 .env
 .env.local

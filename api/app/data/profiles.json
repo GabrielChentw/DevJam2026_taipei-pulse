@@ -1,0 +1,187 @@
+{
+  "meta": {
+    "purpose": "每種障礙類型是一組資料，不是一段程式。新增障礙類型只需在這裡加一筆。",
+    "scoring": "分數越低越好。分數是各項特徵值乘以權重後相加，代表『對這個人的總負擔』。",
+    "design_note": "hard_rules 決定可行與否（違反就排除，但保留理由）；weights 決定可行路線之間的排序。兩者分開，因為『不能走』和『比較不好走』是不同的事。"
+  },
+
+  "unknown_policies": {
+    "block": "資料缺漏時視為不可行。用於安全關鍵、猜錯代價很高的特徵。",
+    "warn": "資料缺漏時仍視為可行，但標記警告請使用者到現場確認。",
+    "ignore": "資料缺漏時忽略此項。用於對這個人不重要的特徵。"
+  },
+
+  "profiles": [
+    {
+      "id": "wheelchair",
+      "label": "輪椅使用者",
+      "summary": "垂直移動與坡度是硬限制。可接受較多轉乘，只要每一段都確實無障礙。",
+
+      "hard_rules": [
+        {
+          "feature": "step_count",
+          "op": "lte",
+          "value": 0,
+          "reason_template": "{leg_name} 有 {actual} 階階梯，輪椅無法通行"
+        },
+        {
+          "feature": "has_elevator",
+          "op": "is_true",
+          "when": { "feature": "level_change", "op": "is_true" },
+          "reason_template": "{leg_name} 需要垂直移動，但沒有無障礙電梯"
+        },
+        {
+          "feature": "low_floor_ratio",
+          "op": "gte",
+          "value": 0.3,
+          "when": { "feature": "mode", "op": "eq", "value": "bus" },
+          "reason_template": "{leg_name} 的低地板班次比例只有 {actual}，等到可搭乘車輛的機會太低"
+        },
+        {
+          "feature": "max_slope_percent",
+          "op": "lte",
+          "value": 8,
+          "reason_template": "{leg_name} 坡度達 {actual}%，超過手動輪椅可安全自行推行的範圍"
+        },
+        {
+          "feature": "total_walk_meters",
+          "op": "lte",
+          "value": 800,
+          "scope": "route",
+          "reason_template": "全程步行 {actual} 公尺，超過設定上限"
+        }
+      ],
+
+      "weights": {
+        "duration_min": 1.0,
+        "walk_meters": 0.03,
+        "max_slope_percent": 4.0,
+        "transfers": 3.0,
+        "platform_gap_cm": 0.8,
+        "station_complexity": 0.5,
+        "street_crossings": 1.0,
+        "uncontrolled_crossings": 3.0,
+        "missing_accessible_restroom": 2.0
+      },
+
+      "unknown_policy": {
+        "has_elevator": "block",
+        "low_floor_ratio": "block",
+        "max_slope_percent": "warn",
+        "platform_gap_cm": "warn",
+        "has_tactile_paving": "ignore",
+        "has_audio_announcement": "ignore",
+        "has_accessible_restroom": "warn",
+        "_default": "warn"
+      },
+
+      "user_overridable": {
+        "total_walk_meters": {
+          "prompt": "單程最多能推多遠？",
+          "unit": "公尺",
+          "default": 800
+        },
+        "max_slope_percent": {
+          "prompt": "電動輪椅可接受較陡的坡，手動則不行。你使用哪一種？",
+          "unit": "%",
+          "default": 8,
+          "presets": { "manual": 6, "electric": 12 }
+        },
+        "step_count": {
+          "prompt": "有無人陪同？有人協助時可接受小台階。",
+          "unit": "階",
+          "default": 0,
+          "presets": { "alone": 0, "accompanied": 1 }
+        }
+      }
+    },
+
+    {
+      "id": "low_vision",
+      "label": "視障者",
+      "summary": "轉乘次數與車站複雜度是最大負擔。坡度幾乎不重要。無號誌路口是硬限制。",
+
+      "hard_rules": [
+        {
+          "feature": "has_audio_announcement",
+          "op": "is_true",
+          "when": { "feature": "is_transit", "op": "is_true" },
+          "reason_template": "{leg_name} 沒有語音報站，無法確認何時下車"
+        },
+        {
+          "feature": "uncontrolled_crossings",
+          "op": "lte",
+          "value": 0,
+          "reason_template": "{leg_name} 需穿越 {actual} 個無號誌路口"
+        }
+      ],
+
+      "weights": {
+        "duration_min": 1.0,
+        "transfers": 12.0,
+        "vehicle_boardings": 5.0,
+        "station_complexity": 6.0,
+        "street_crossings": 4.0,
+        "walk_meters": 0.01,
+        "max_slope_percent": 0.2,
+        "platform_gap_cm": 1.5,
+        "missing_tactile_paving": 8.0,
+        "missing_platform_screen_door": 3.0
+      },
+
+      "unknown_policy": {
+        "has_audio_announcement": "warn",
+        "has_tactile_paving": "warn",
+        "has_platform_screen_door": "warn",
+        "platform_gap_cm": "warn",
+        "low_floor_ratio": "ignore",
+        "max_slope_percent": "ignore",
+        "has_accessible_restroom": "ignore",
+        "_default": "warn"
+      },
+
+      "user_overridable": {
+        "transfers": {
+          "prompt": "熟悉的路線可以接受轉乘嗎？",
+          "unit": "次",
+          "default": null
+        }
+      },
+
+      "divergence_note": "與輪椅的關鍵差異：站內垂直移動有電梯即可解決，但複雜車站的方向辨識無法靠設施解決。因此本 profile 寧願多花時間搭單一車輛，也不願在大站轉乘。"
+    },
+
+    {
+      "id": "elderly",
+      "label": "高齡者",
+      "summary": "示範架構可擴充性。沒有寫任何新程式，只是重新加權。",
+
+      "hard_rules": [
+        {
+          "feature": "step_count",
+          "op": "lte",
+          "value": 20,
+          "reason_template": "{leg_name} 有 {actual} 階階梯，負擔過重"
+        }
+      ],
+
+      "weights": {
+        "duration_min": 1.0,
+        "walk_meters": 0.025,
+        "transfers": 4.0,
+        "step_count": 0.5,
+        "max_slope_percent": 2.0,
+        "station_complexity": 2.0,
+        "street_crossings": 1.5,
+        "missing_accessible_restroom": 1.0
+      },
+
+      "unknown_policy": {
+        "has_elevator": "warn",
+        "_default": "warn"
+      },
+
+      "user_overridable": {}
+    }
+  ]
+}

@@ -45,10 +45,13 @@
 | --- | --- |
 | 3D 地圖 | Google Maps JavaScript API · Photorealistic 3D Maps (`Map3DElement`) |
 | 前端 | React 19 + Vite 7 + TypeScript |
-| 後端 | Cloud Run · FastAPI |
+| 後端 | FastAPI（部署目標 Cloud Run） |
 | Agent | Agent Development Kit (ADK) + Gemini |
-| 資料庫 | Firestore |
+| 資料庫 | Firestore（一日版先用 repo 內的 JSON 種子資料）|
 | 路線候選 | Google Routes API（含離線 fallback） |
+
+引擎寫在 Python 而不是前端 TypeScript，是因為 **agent 必須呼叫它**。ADK 是 Python，
+若引擎在前端就等於要維護兩份實作。
 
 示範範圍：捷運板南線 台北車站 ↔ 市政府 走廊及沿線公車。
 
@@ -63,6 +66,31 @@
 3. 建立 API 金鑰
 
 逐步操作與疑難排解見 **[`docs/setup-gcp.md`](docs/setup-gcp.md)**。
+
+### 後端（路線評分引擎）
+
+```powershell
+cd api
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe verify_engine.py     # 驗證差異化行為
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --port 8000
+```
+
+`verify_engine.py` 會把引擎的判斷完整攤開，並斷言五項核心行為。它不是單元測試，
+是一份「看得懂的證明」—— 讓人確認輪椅走捷運、視障走公車是**算出來的**，不是寫死的。
+
+API 文件在 <http://127.0.0.1:8000/docs>。核心端點：
+
+| 端點 | 用途 |
+| --- | --- |
+| `POST /api/plan` | 單一 profile 的路線規劃，回傳可行路線**與被排除路線加原因** |
+| `GET /api/compare` | 同一組起終點、多 profile 並列。這是專案的核心論證 |
+| `GET /api/profiles` | 可用的障礙 profile 與可對話調整的參數 |
+| `GET /api/corridor` | 走廊無障礙種子資料，含每筆的 confidence |
+
+> **安全性**：後端目前**沒有身分驗證**，僅供本機開發與 demo。部署到公開網址前必須
+> 加上驗證與速率限制 —— 屆時它會開始接收使用者的無障礙需求，那是敏感個人資料。
 
 ### 前端
 
@@ -86,16 +114,39 @@ cmd /c "npm run dev"
 ## 專案結構
 
 ```
-docs/                     架構文件與設定指南
-scripts/                  診斷與環境建置工具（PowerShell）
+docs/                       架構文件與設定指南
+scripts/                    診斷與環境建置工具（PowerShell）
+api/
+  verify_engine.py          引擎行為的可讀驗證
+  app/
+    main.py                 FastAPI 端點
+    models.py               Feature 一律帶 confidence
+    data/
+      corridor.json         走廊無障礙事實（人工建置，每筆帶 confidence）
+      profiles.json         障礙 profile：硬條件 + 軟權重
+      candidates.json       離線候選路線
+    engine/
+      annotate.py           leg -> 客觀特徵。完全不知道障礙類型的存在
+      rules.py              硬條件解譯器，含資料缺漏政策
+      score.py              加權排序，保留完整 breakdown
+      plan.py               組裝與解釋文字生成
 web/
-  public/simple-3d.html   最小重現頁，用於區分設定問題與程式問題
+  public/simple-3d.html     最小重現頁，用於區分設定問題與程式問題
   src/
-    lib/googleMaps.ts     Maps API 載入器 + 錯誤攔截
-    components/Map3D.tsx  3D 地圖元件
-    data/corridor.ts      板南線走廊座標與相機定位點
+    lib/googleMaps.ts       Maps API 載入器 + 錯誤攔截
+    components/Map3D.tsx    3D 地圖元件
+    data/corridor.ts        板南線走廊座標與相機定位點
     App.tsx
 ```
+
+引擎的三層責任分離是刻意的：
+
+- **`annotate.py`** 只回答「客觀事實是什麼」，完全不知道障礙類型的存在
+- **`rules.py`** 回答「對這個人可不可行」
+- **`score.py`** 回答「可行的之中哪個負擔較小」
+
+這個分離就是「新增障礙類型 = 新增一筆資料」得以成立的原因。`elderly` profile
+就是證明 —— 它沒有寫任何新程式，只是重新加權。
 
 ## 工具腳本
 
@@ -114,15 +165,52 @@ web/
 > 所有 `.ps1` 都刻意寫成**純 ASCII**。Windows PowerShell 5.1 以 ANSI 解讀 `.ps1`，
 > 非 ASCII 註解會弄壞 parser。這是實際踩到的坑。
 
+## 三人分工
+
+| 角色 | 負責 | 依賴 |
+| --- | --- | --- |
+| 前端 | 3D 地圖疊路線、輪椅 vs 視障並排對比畫面、相機飛行 | `docs/api-contract.md`，可先用假資料開工 |
+| Agent | ADK + Gemini，對話追問需求、呼叫 `/api/plan`、控制地圖相機 | 同上，`/docs` 有互動測試介面 |
+| 後端（此 repo 主線）| 引擎、種子資料、契約文件、整合、demo 腳本 | — |
+
+前端要串接的完整說明在 **[`docs/api-contract.md`](docs/api-contract.md)**，
+含 curl 範例、TypeScript 型別（`web/src/types/api.ts`）、疊路線的邏輯建議、
+以及幾個容易踩的坑（`Feature.value` 為 `null` 不是 `false`、`geometry_precision`
+的意義）。
+
 ## 目前進度
 
 - [x] 架構設計與圖表
 - [x] 前端骨架 + Photorealistic 3D 地圖 + 相機控制 + 車站標記
 - [x] GCP 環境建置與驗證工具鏈
-- [ ] 走廊無障礙種子資料（板南線 7 站）
-- [ ] Profile 驅動的路線評分引擎
+- [x] 走廊無障礙種子資料（板南線 7 站 + 3 條公車，每筆帶 confidence）
+- [x] Profile 驅動的路線評分引擎（輪椅 / 視障 / 高齡，五項行為驗證通過）
+- [x] 路段幾何資料（17 個 leg 皆可畫圖，`verify_geometry.py` 驗證）
+- [x] 前端 API 契約文件與型別定義
+- [ ] 前端接上路線引擎，3D 地圖疊路線
 - [ ] ADK Agent 與對話介面
 - [ ] 巴士 3D 移動動畫
+
+### 引擎目前的實際輸出
+
+起點台北車站、終點台北市政府，五條候選路線：
+
+| Profile | 首選 | 可行 | 排除 |
+| --- | --- | --- | --- |
+| 輪椅使用者 | 捷運板南線直達（市政府站 3 號出口，有電梯）| 1 | 4 |
+| 視障者 | 信義幹線公車直達 | 4 | 1 |
+| 高齡者 | 信義幹線公車直達 | 4 | 1 |
+
+三個值得注意的行為，都是引擎自己算出來的：
+
+- **輪椅排除了更快的路線並說明原因**：走市政府站 1 號出口快 2 分鐘，但那個出口有 28 階樓梯。
+- **輪椅因資料缺漏而排除公車**，不是因為公車不好。低地板班次比例是 `unknown`，
+  而輪椅 profile 對這個特徵的政策是 `block` —— 安全關鍵資訊不猜測。
+- **視障排除了穿越無號誌路口的路線**，即使它比推薦路線快 6 分鐘。
+
+**一個值得在簡報講的發現**：輪椅使用者只有 1 條可行路線，視障者有 4 條。
+差距不是來自城市的無障礙設施，而是來自**資料缺口** —— 只要低地板公車資料補上，
+輪椅使用者的選擇立刻從 1 條變成 3 條。資料的缺失本身就在限制身障者的移動自由。
 
 ## 開發筆記
 

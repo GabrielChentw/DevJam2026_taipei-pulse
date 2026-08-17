@@ -1,0 +1,222 @@
+{
+  "meta": {
+    "scope": "捷運板南線 台北車站 ↔ 市政府 走廊及沿線公車",
+    "curated_at": "2026-08-17",
+    "method": "人工建置。自動擷取（TDX / metro.taipei / data.taipei）為後續工作。",
+    "honesty_note": "每筆設施資料都帶 confidence 欄位。null 代表『我們沒有這筆資料』，不是『沒有這項設施』 —— 兩者對使用者的意義完全不同，引擎與 agent 都必須據實呈現。"
+  },
+
+  "confidence_levels": {
+    "verified": "有明確來源可查（例如 metro.taipei 車站頁面）",
+    "regulatory": "依法規或全系統政策可高度確信（例如捷運各站皆設無障礙電梯）",
+    "estimated": "依常識或部分觀察推估，未經查證",
+    "unknown": "沒有資料"
+  },
+
+  "landmarks": {
+    "_note": "供 candidates.json 的 leg 畫出示意路線用。這些是人工估計的座標，不是實測站牌位置，前端與 agent 都應視為 approximate。真正的站牌座標應改用 TDX 的公車站點資料。",
+
+    "taipei_station_m7": { "name": "台北車站 M7 出口", "position": { "lat": 25.0464, "lng": 121.5177 } },
+    "taipei_station_sinyi_stop": { "name": "信義幹線 台北車站站牌", "position": { "lat": 25.0458, "lng": 121.5183 } },
+
+    "city_hall_exit3": { "name": "市政府站 3 號出口", "position": { "lat": 25.0407, "lng": 121.5683 } },
+    "city_hall_exit1": { "name": "市政府站 1 號出口", "position": { "lat": 25.0412, "lng": 121.5674 } },
+    "city_hall_building": { "name": "台北市政府大樓", "position": { "lat": 25.0375, "lng": 121.5637 } },
+    "sinyi_sec5_stop": { "name": "信義幹線 市府轉運站", "position": { "lat": 25.0372, "lng": 121.5647 } },
+
+    "zhongxiao_dunhua_stop": { "name": "忠孝敦化站 3 號出口", "position": { "lat": 25.0416, "lng": 121.5497 } },
+    "bus672_zhongxiao_stop": { "name": "忠孝敦化 672 站牌", "position": { "lat": 25.0413, "lng": 121.5503 } },
+    "bus672_near_city_hall_stop": { "name": "672 市府站牌", "position": { "lat": 25.0388, "lng": 121.5645 } },
+
+    "sys_memorial_exit": { "name": "國父紀念館站出口", "position": { "lat": 25.0413, "lng": 121.5576 } }
+  },
+
+  "stations": [
+    {
+      "id": "BL12",
+      "name": "台北車站",
+      "line": "BL",
+      "position": { "lat": 25.0478, "lng": 121.517, "altitude": 20 },
+      "facilities": {
+        "has_elevator": { "value": true, "confidence": "regulatory" },
+        "elevator_exits": { "value": ["M7", "M8"], "confidence": "estimated" },
+        "step_only_exits": { "value": ["M1", "M2", "M3", "M4", "M5", "M6"], "confidence": "estimated" },
+        "has_tactile_paving": { "value": true, "confidence": "regulatory" },
+        "has_audio_announcement": { "value": true, "confidence": "regulatory" },
+        "has_platform_screen_door": { "value": null, "confidence": "unknown" },
+        "has_accessible_restroom": { "value": true, "confidence": "estimated" },
+        "has_staff_assistance": { "value": true, "confidence": "regulatory" },
+        "platform_gap_cm": { "value": 8, "confidence": "estimated" }
+      },
+      "complexity": {
+        "exit_count": 24,
+        "underground_levels": 4,
+        "interchange_lines": ["BL", "R"],
+        "score": 5,
+        "note": "全系統最複雜的車站。與台鐵、高鐵、機場捷運、松山新店線共構，出口極多。對需要辨識方向的使用者是顯著負擔。"
+      }
+    },
+    {
+      "id": "BL13",
+      "name": "善導寺",
+      "line": "BL",
+      "position": { "lat": 25.0446, "lng": 121.5252, "altitude": 20 },
+      "facilities": {
+        "has_elevator": { "value": true, "confidence": "regulatory" },
+        "elevator_exits": { "value": null, "confidence": "unknown" },
+        "step_only_exits": { "value": null, "confidence": "unknown" },
+        "has_tactile_paving": { "value": true, "confidence": "regulatory" },
+        "has_audio_announcement": { "value": true, "confidence": "regulatory" },
+        "has_platform_screen_door": { "value": null, "confidence": "unknown" },
+        "has_accessible_restroom": { "value": null, "confidence": "unknown" },
+        "has_staff_assistance": { "value": true, "confidence": "regulatory" },
+        "platform_gap_cm": { "value": null, "confidence": "unknown" }
+      },
+      "complexity": { "exit_count": 6, "underground_levels": 3, "interchange_lines": [], "score": 2 }
+    },
+    {
+      "id": "BL14",
+      "name": "忠孝新生",
+      "line": "BL",
+      "position": { "lat": 25.0424, "lng": 121.533, "altitude": 20 },
+      "facilities": {
+        "has_elevator": { "value": true, "confidence": "regulatory" },
+        "elevator_exits": { "value": null, "confidence": "unknown" },
+        "step_only_exits": { "value": null, "confidence": "unknown" },
+        "has_tactile_paving": { "value": true, "confidence": "regulatory" },
+        "has_audio_announcement": { "value": true, "confidence": "regulatory" },
+        "has_platform_screen_door": { "value": null, "confidence": "unknown" },
+        "has_accessible_restroom": { "value": null, "confidence": "unknown" },
+        "has_staff_assistance": { "value": true, "confidence": "regulatory" },
+        "platform_gap_cm": { "value": null, "confidence": "unknown" }
+      },
+      "complexity": { "exit_count": 7, "underground_levels": 4, "interchange_lines": ["BL", "O"], "score": 4 }
+    },
+    {
+      "id": "BL15",
+      "name": "忠孝復興",
+      "line": "BL",
+      "position": { "lat": 25.0416, "lng": 121.5434, "altitude": 20 },
+      "facilities": {
+        "has_elevator": { "value": true, "confidence": "regulatory" },
+        "elevator_exits": { "value": null, "confidence": "unknown" },
+        "step_only_exits": { "value": null, "confidence": "unknown" },
+        "has_tactile_paving": { "value": true, "confidence": "regulatory" },
+        "has_audio_announcement": { "value": true, "confidence": "regulatory" },
+        "has_platform_screen_door": { "value": null, "confidence": "unknown" },
+        "has_accessible_restroom": { "value": null, "confidence": "unknown" },
+        "has_staff_assistance": { "value": true, "confidence": "regulatory" },
+        "platform_gap_cm": { "value": null, "confidence": "unknown" }
+      },
+      "complexity": {
+        "exit_count": 8,
+        "underground_levels": 4,
+        "interchange_lines": ["BL", "BR"],
+        "score": 4,
+        "note": "與文湖線轉乘，垂直移動距離長。"
+      }
+    },
+    {
+      "id": "BL16",
+      "name": "忠孝敦化",
+      "line": "BL",
+      "position": { "lat": 25.0416, "lng": 121.5497, "altitude": 20 },
+      "facilities": {
+        "has_elevator": { "value": true, "confidence": "regulatory" },
+        "elevator_exits": { "value": null, "confidence": "unknown" },
+        "step_only_exits": { "value": null, "confidence": "unknown" },
+        "has_tactile_paving": { "value": true, "confidence": "regulatory" },
+        "has_audio_announcement": { "value": true, "confidence": "regulatory" },
+        "has_platform_screen_door": { "value": null, "confidence": "unknown" },
+        "has_accessible_restroom": { "value": null, "confidence": "unknown" },
+        "has_staff_assistance": { "value": true, "confidence": "regulatory" },
+        "platform_gap_cm": { "value": null, "confidence": "unknown" }
+      },
+      "complexity": { "exit_count": 8, "underground_levels": 3, "interchange_lines": [], "score": 3 }
+    },
+    {
+      "id": "BL17",
+      "name": "國父紀念館",
+      "line": "BL",
+      "position": { "lat": 25.0413, "lng": 121.5576, "altitude": 20 },
+      "facilities": {
+        "has_elevator": { "value": true, "confidence": "regulatory" },
+        "elevator_exits": { "value": null, "confidence": "unknown" },
+        "step_only_exits": { "value": null, "confidence": "unknown" },
+        "has_tactile_paving": { "value": true, "confidence": "regulatory" },
+        "has_audio_announcement": { "value": true, "confidence": "regulatory" },
+        "has_platform_screen_door": { "value": null, "confidence": "unknown" },
+        "has_accessible_restroom": { "value": null, "confidence": "unknown" },
+        "has_staff_assistance": { "value": true, "confidence": "regulatory" },
+        "platform_gap_cm": { "value": null, "confidence": "unknown" }
+      },
+      "complexity": { "exit_count": 5, "underground_levels": 3, "interchange_lines": [], "score": 2 }
+    },
+    {
+      "id": "BL18",
+      "name": "市政府",
+      "line": "BL",
+      "position": { "lat": 25.041, "lng": 121.5679, "altitude": 20 },
+      "facilities": {
+        "has_elevator": { "value": true, "confidence": "verified" },
+        "elevator_exits": {
+          "value": ["3", "5"],
+          "confidence": "verified",
+          "source": "https://web.metro.taipei/pages2026/WebStation/100",
+          "detail": "出口3（信義路5段南側）、出口5（信義路5段北側、市府路西側）"
+        },
+        "step_only_exits": { "value": null, "confidence": "unknown" },
+        "has_tactile_paving": { "value": true, "confidence": "regulatory" },
+        "has_audio_announcement": { "value": true, "confidence": "regulatory" },
+        "has_platform_screen_door": { "value": null, "confidence": "unknown" },
+        "has_accessible_restroom": { "value": true, "confidence": "estimated" },
+        "has_staff_assistance": { "value": true, "confidence": "regulatory" },
+        "platform_gap_cm": { "value": 8, "confidence": "estimated" }
+      },
+      "complexity": {
+        "exit_count": 4,
+        "underground_levels": 3,
+        "interchange_lines": [],
+        "score": 3,
+        "note": "與市府轉運站、統一時代百貨連通，出口方向不易辨識。"
+      }
+    }
+  ],
+
+  "bus_routes": [
+    {
+      "id": "SINYI_TRUNK",
+      "name": "信義幹線",
+      "operator": "多家聯營",
+      "facilities": {
+        "low_floor_ratio": { "value": null, "confidence": "unknown", "note": "TDX 車輛資料的低地板欄位覆蓋率尚未查證。這是本專案最關鍵的資料缺口。" },
+        "has_audio_announcement": { "value": true, "confidence": "regulatory" },
+        "has_visual_display": { "value": true, "confidence": "estimated" },
+        "has_ramp": { "value": null, "confidence": "unknown" }
+      },
+      "note": "沿信義路行駛，班次密集。"
+    },
+    {
+      "id": "BUS_672",
+      "name": "672",
+      "operator": "大都會客運",
+      "facilities": {
+        "low_floor_ratio": { "value": null, "confidence": "unknown" },
+        "has_audio_announcement": { "value": true, "confidence": "regulatory" },
+        "has_visual_display": { "value": true, "confidence": "estimated" },
+        "has_ramp": { "value": null, "confidence": "unknown" }
+      }
+    },
+    {
+      "id": "BLUE_5",
+      "name": "藍5",
+      "operator": "大都會客運",
+      "facilities": {
+        "low_floor_ratio": { "value": null, "confidence": "unknown" },
+        "has_audio_announcement": { "value": true, "confidence": "regulatory" },
+        "has_visual_display": { "value": true, "confidence": "estimated" },
+        "has_ramp": { "value": null, "confidence": "unknown" }
+      }
+    }
+  ]
+}
