@@ -8,9 +8,14 @@
 SDK 會讀取函式簽名與 docstring 生成 tool schema 餵給模型，所以這裡的文字
 不只是給人看的註解，也是模型決定「現在該不該呼叫這個工具」的依據。
 寫得含糊，模型就會亂猜參數；寫得精確，效果立竿見影。
-"""
 
-from __future__ import annotations
+刻意不加 `from __future__ import annotations`：那會讓所有型別註記變成字串
+（PEP 563），而 google-genai 的自動 function calling 在生成 tool schema 時
+會對 annotation 做 isinstance 檢查，遇到字串會直接拋出
+"isinstance() arg 2 must be a type, a tuple of types, or a union"，
+導致每次工具呼叫都失敗、模型只能憑空編造答案。這個模組裡的型別註記必須是
+真正的型別物件，不能是字串。
+"""
 
 from ..engine import plan as planner
 from ..models import PlanRequest
@@ -76,6 +81,12 @@ def plan_accessible_route(
             overrides=overrides,
         )
     )
+    # 這個函式一律回完整資料。app/agent/chat.py 的 capture wrapper 需要完整
+    # 結構才能重建 PlanResponse 交給前端疊圖；但完整 JSON 不適合直接送進模型
+    # 的 context（曾經觀察到塞進完整 JSON 後模型的最終回覆反而否認自己有能力
+    # 規劃，即使工具呼叫本身完全成功）。因此「精簡給模型看」的邏輯特意放在
+    # chat.py 而不是這裡——這個模組維持單一職責：忠實地包一層引擎，不做任何
+    # 因應對話層需求而妥協的裁切。
     return response.model_dump()
 
 
@@ -111,3 +122,10 @@ AGENT_TOOLS = [
     plan_accessible_route,
     compare_routes_across_profiles,
 ]
+"""這三個函式的清單，回傳完整資料。
+
+app/agent/chat.py 實際對話時**不用這個常數**——它需要另外包一層讓完整結果
+寫進 capture dict、同時回精簡摘要給模型（見 chat.py 的 _wrap_tools_with_capture）。
+這裡留著是給不需要那層折疊的呼叫端用，例如未來若要加一個不透過對話、
+直接把完整工具清單交給某個獨立 agent runner 的路徑。
+"""
