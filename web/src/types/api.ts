@@ -11,7 +11,7 @@
 
 export type Confidence = 'verified' | 'regulatory' | 'estimated' | 'unknown';
 
-export type GeometryPrecision = 'approximate' | 'missing';
+export type GeometryPrecision = 'road_snapped' | 'approximate' | 'missing';
 
 export interface LatLngPoint {
   lat: number;
@@ -43,6 +43,7 @@ export interface AnnotatedLeg {
    */
   path: LatLngPoint[];
   /**
+   * 'road_snapped'：步行段來自 Routes API WALK 路網幾何；仍不保證完整的人行道或無障礙資訊。
    * 'approximate'：端點有依據，但點與點之間是直線，不是真實道路 / 軌道 shape。
    *   畫成虛線或加註「示意路線」有助於誠實呈現。
    * 'missing'：path 為空陣列時必為此值。

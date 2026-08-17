@@ -1,13 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { PlannedRoute } from '../types'
-
-function speak(text: string) {
-  if (!('speechSynthesis' in window)) return
-  window.speechSynthesis.cancel()
-  const u = new SpeechSynthesisUtterance(text)
-  u.lang = 'zh-TW'; u.rate = 0.9
-  window.speechSynthesis.speak(u)
-}
+import { sanitizeUserFacingScore } from '../mockData'
+import { speak, stopSpeaking } from '../lib/speech'
 
 const STEP_META = {
   walk: {
@@ -61,37 +55,45 @@ const ELEVATOR_ICON = (
 interface Props {
   routes: PlannedRoute[]
   onSelectRoute: (route: PlannedRoute) => void
+  speechRate: number
 }
 
-export default function RoutePanel({ routes, onSelectRoute }: Props) {
+export default function RoutePanel({ routes, onSelectRoute, speechRate }: Props) {
   const recommended = routes.filter(r => !r.excluded)
   const excluded    = routes.filter(r => r.excluded)
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null)
+  const [speakingRouteId, setSpeakingRouteId] = useState<string | null>(null)
+
+  useEffect(() => () => stopSpeaking(), [])
+
+  useEffect(() => {
+    stopSpeaking()
+    setSpeakingRouteId(null)
+  }, [speechRate])
+
+  const toggleRouteSpeech = (route: PlannedRoute) => {
+    if (speakingRouteId === route.id) {
+      stopSpeaking()
+      setSpeakingRouteId(null)
+      return
+    }
+
+    setSpeakingRouteId(route.id)
+    const started = speak(
+      getRouteSpeechSummary(route),
+      speechRate,
+      () => setSpeakingRouteId(current => current === route.id ? null : current),
+    )
+    if (!started) setSpeakingRouteId(null)
+  }
 
   // ── 空白狀態 ──────────────────────────────────────────────────────────────
   if (routes.length === 0) {
     return (
       <div style={{
-        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-        height: '100%', minHeight: 0, padding: '40px 32px', gap: 16, textAlign: 'center',
-        background: 'var(--bg-base)',
+        height: '100%', minHeight: 0, background: 'var(--bg-base)',
       }}>
-        <div style={{
-          width: 60, height: 60, borderRadius: 18, background: 'var(--green-light)',
-          border: '1.5px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}>
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--green)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M9 20l-5.447-2.724A1 1 0 0 1 3 16.382V5.618a1 1 0 0 1 1.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0 0 21 18.382V7.618a1 1 0 0 0-.553-.894L15 4m0 13V4M9 7l6-3"/>
-          </svg>
-        </div>
-        <div>
-          <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8 }}>路線將顯示於此</div>
-          <div style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.8 }}>
-            在左側與助理對話<br />
-            告知您的需求與起終點<br />
-            助理將為您篩選最合適的路線
-          </div>
-        </div>
+        <span className="sr-only" role="status">尚未產生路線，請先與路線助理對話。</span>
       </div>
     )
   }
@@ -135,6 +137,8 @@ export default function RoutePanel({ routes, onSelectRoute }: Props) {
                     selected={expanded}
                     onShowDetails={() => setSelectedRouteId(current => current === route.id ? null : route.id)}
                     onSelect={() => onSelectRoute(route)}
+                    speaking={speakingRouteId === route.id}
+                    onSpeak={() => toggleRouteSpeech(route)}
                   />
                   {expanded && (
                     <div id={`route-details-${route.id}`} className="route-expanded-detail">
@@ -198,6 +202,34 @@ function getRouteDisplayName(route: PlannedRoute) {
   return '步行路線'
 }
 
+function getRouteSpeechSummary(route: PlannedRoute) {
+  const steps = route.steps.map(step => {
+    const line = step.line ? `${step.line}，` : ''
+    return `${STEP_META[step.type].label}，${line}${step.duration}分鐘`
+  }).join('。')
+  const transfer = route.segments <= 1 ? '免轉乘' : `轉乘${route.segments - 1}次`
+  const accessible = route.fullyAccessible ? '，全程無障礙' : ''
+  return `${route.label}，${getRouteDisplayName(route)}，共${route.totalMinutes}分鐘。${steps}。${transfer}${accessible}。`
+}
+
+function SpeakerIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+      <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+      <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+    </svg>
+  )
+}
+
+function StopIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <rect x="5" y="5" width="14" height="14" rx="2" />
+    </svg>
+  )
+}
+
 // ── 路線比較摘要 ────────────────────────────────────────────────────────────
 function RouteSummary({
   route,
@@ -205,16 +237,17 @@ function RouteSummary({
   selected,
   onShowDetails,
   onSelect,
+  onSpeak,
+  speaking,
 }: {
   route: PlannedRoute
   recommended: boolean
   selected: boolean
   onShowDetails: () => void
   onSelect: () => void
+  onSpeak: () => void
+  speaking: boolean
 }) {
-  const walkingMinutes = route.steps
-    .filter(step => step.type === 'walk')
-    .reduce((total, step) => total + step.duration, 0)
   const transferLabel = route.segments <= 1 ? '免轉乘' : `${route.segments - 1} 次轉乘`
   const displayName = getRouteDisplayName(route)
 
@@ -232,9 +265,9 @@ function RouteSummary({
         <span className="route-summary-primary">
           <span className="route-summary-topline">
             <span className="route-summary-name">{displayName}</span>
-            <span className="route-code-badge">{route.label}</span>
             {recommended && <span className="route-best-badge">首選</span>}
           </span>
+          <span className="route-code-badge">{route.label}</span>
           <span className="route-summary-time">
             <strong>{route.totalMinutes}</strong> 分鐘
           </span>
@@ -246,35 +279,43 @@ function RouteSummary({
               const meta = STEP_META[step.type]
               return (
                 <span key={`${step.type}-${index}`} className="route-mode-item">
-                  <span style={{ color: meta.color }}>{meta.icon}</span>
+                  <span className="route-mode-icon" style={{ color: meta.color }}>{meta.icon}</span>
                   {meta.label}
+                  <span className="route-mode-duration">{step.duration} 分</span>
                   {index < route.steps.length - 1 && <span className="route-mode-arrow">→</span>}
                 </span>
               )
             })}
           </span>
 
-          <span className="route-summary-meta">
-            <span>步行 {walkingMinutes} 分</span>
-            <span>{transferLabel}</span>
-            {route.fullyAccessible && <span>全程無障礙</span>}
+          <span className="route-summary-meta-row">
+            <span className="route-summary-meta">
+              <span>{transferLabel}</span>
+              {route.fullyAccessible && <span>全程無障礙</span>}
+            </span>
+            <span className="route-summary-cue">{selected ? '收合詳情' : '查看詳情'}</span>
           </span>
         </span>
-
-        <span className="route-summary-cue">{selected ? '收合詳情' : '查看詳情'}</span>
       </button>
 
-      <button
-        type="button"
-        className="route-summary-map"
-        onClick={onSelect}
-        aria-label={`在 3D 地圖上查看${route.label}`}
-      >
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>
-        </svg>
-        <span>3D 地圖</span>
-      </button>
+      <span className="route-summary-actions">
+        <button
+          type="button"
+          className={`route-summary-speak${speaking ? ' is-speaking' : ''}`}
+          onClick={onSpeak}
+          aria-label={speaking ? `停止朗讀${route.label}` : `朗讀${route.label}重點`}
+          aria-pressed={speaking}
+        >
+          {speaking ? <StopIcon /> : <SpeakerIcon />}
+          <span>{speaking ? '停止朗讀' : '朗讀'}</span>
+        </button>
+        <button type="button" className="route-summary-map" onClick={onSelect} aria-label={`在 3D 地圖上查看${route.label}`}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>
+          </svg>
+          <span>3D 地圖</span>
+        </button>
+      </span>
     </article>
   )
 }
@@ -318,7 +359,8 @@ function Divider({ label }: { label: string }) {
 
 // ── 推薦路線卡 ────────────────────────────────────────────────────────────────
 function RouteCard({ route, onSelect, embedded = false }: { route: PlannedRoute; onSelect: () => void; embedded?: boolean }) {
-  const ttsText = `${route.label}，${route.totalMinutes}分鐘。${route.steps.map(s => `${s.description}，${s.duration}分鐘`).join('。')}。${route.reason}`
+  const userFacingReason = sanitizeUserFacingScore(route.reason)
+  const ttsText = getRouteSpeechSummary(route)
 
   return (
     <div className={embedded ? 'route-detail-card is-embedded' : 'route-detail-card'} style={{
@@ -422,14 +464,14 @@ function RouteCard({ route, onSelect, embedded = false }: { route: PlannedRoute;
       </div>
 
       {/* 路線說明 */}
-      {route.reason && (
+      {userFacingReason && (
         <div style={{
           margin: '0 16px', padding: '10px 12px',
           background: 'var(--green-light)', borderRadius: 10,
           fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.6,
           border: '1px solid var(--border)',
         }}>
-          {route.reason}
+          {userFacingReason}
         </div>
       )}
 

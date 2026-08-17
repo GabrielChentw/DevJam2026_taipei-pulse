@@ -1,3 +1,5 @@
+import type { GeometryPrecision, LatLngPoint } from './types/api'
+
 export type AccessibilityMode = 'general' | 'visual' | 'wheelchair' | 'elderly'
 export type AppPhase = 'chat' | 'map'
 
@@ -10,6 +12,8 @@ export interface RouteStep {
   hasElevator?: boolean
   line?: string
   stationId?: string // 對應 corridor.ts 的站點 id
+  path?: LatLngPoint[]
+  geometryPrecision?: GeometryPrecision
 }
 
 export interface PlannedRoute {
@@ -18,7 +22,7 @@ export interface PlannedRoute {
   from: string
   to: string
   totalMinutes: number
-  segments: number
+  segments: number // 大眾運輸搭乘段數；轉乘次數 = segments - 1，不包含步行段
   steps: RouteStep[]
   fullyAccessible: boolean
   reason: string

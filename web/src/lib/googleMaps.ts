@@ -21,13 +21,16 @@ export interface LatLngAltitude {
 /** Map3DElement 我們實際會用到的部分。 */
 export interface Map3DElementLike extends HTMLElement {
   center: LatLngAltitude;
+  cameraPosition: LatLngAltitude;
   range: number;
   tilt: number;
   heading: number;
+  fov: number;
   mode: string;
   flyCameraTo(options: {
     endCamera: {
-      center: LatLngAltitude;
+      center?: LatLngAltitude;
+      cameraPosition?: LatLngAltitude;
       range?: number;
       tilt?: number;
       heading?: number;

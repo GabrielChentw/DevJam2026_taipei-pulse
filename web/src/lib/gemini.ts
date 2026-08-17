@@ -14,7 +14,7 @@ const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL
 
 function buildSystemPrompt(mode: AccessibilityMode): string {
   const modeDesc = {
-    general:    '一般使用者',
+    general:    '尚未指定無障礙需求（請先詢問需求）',
     visual:     '視障使用者（需要語音友善路線、少轉乘、有語音報站）',
     wheelchair: '輪椅使用者（需要全程電梯、無階梯、無障礙出口）',
     elderly:    '高齡使用者（偏好少換乘、步行距離短、座位充足）',

@@ -118,7 +118,6 @@ def _summarize_route(route: EvaluatedRoute) -> dict[str, object]:
         "candidate_id": route.candidate_id,
         "label": route.label,
         "feasible": route.feasible,
-        "score": route.score,
         "duration_min": route.duration_min,
         "total_walk_meters": route.total_walk_meters,
         "transfers": route.transfers,

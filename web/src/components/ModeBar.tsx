@@ -1,10 +1,9 @@
 import type { AccessibilityMode } from '../types'
 
 const MODES: { key: AccessibilityMode; label: string; color: string; bg: string }[] = [
-  { key: 'general',    label: '一般',  color: '#3A6B4F', bg: '#EBF2ED' },
   { key: 'visual',     label: '視障',  color: '#6B3A6B', bg: '#F2EBF2' },
   { key: 'wheelchair', label: '輪椅',  color: '#3A5E6B', bg: '#EBF1F2' },
-  { key: 'elderly',    label: '高齡',  color: '#8B5E3C', bg: '#F5EFE8' },
+  { key: 'elderly',    label: '高齡者', color: '#8B5E3C', bg: '#F5EFE8' },
 ]
 
 interface Props {

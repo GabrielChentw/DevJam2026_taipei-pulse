@@ -72,7 +72,7 @@ curl "http://127.0.0.1:8000/api/compare?profiles=wheelchair,low_vision"
 ```ts
 {
   path: LatLngPoint[],           // 直接餵給 Polyline3DElement 的座標陣列
-  geometry_precision: string,    // 'approximate' | 'missing'
+  geometry_precision: string,    // 'road_snapped' | 'approximate' | 'missing'
   mode: 'walk' | 'metro' | 'bus',
   name: string,
 }
@@ -93,15 +93,19 @@ for (const leg of route.legs) {
 }
 ```
 
-### 關於 `geometry_precision: 'approximate'`
+### 關於 `geometry_precision`
 
-目前**所有** leg 都是 `approximate`，這是誠實的標示，不是 bug。原因：
+步行段在後端設定 `GOOGLE_ROUTES_API_KEY` 後，會以 Google Routes API 的 `WALK`
+模式取得高品質 GeoJSON 路網幾何，並標成 `road_snapped`。
+
+其餘情況會是：
 
 - 走廊種子資料手打了車站、站牌、出口、目的地建築的座標
-- 但兩點之間畫的是**直線**，不是真實道路或捷運軌道的 shape
+- `approximate`：兩點之間是**直線**，不是真實道路或捷運軌道的 shape；Routes API
+  未設定或暫時失敗時也會安全降級到這個值
 - 所以路線看起來會像用直線連接幾個點，不會貼著實際道路彎曲
 
-建議：不用特別處理 `approximate`（反正目前全部都是），但如果有時間，用**虛線**
+建議：若有時間，用**虛線**
 畫 `approximate` 的路段，會比實線更誠實。如果看到 `missing`，代表資料完全缺漏，
 邏輯上就跳過不畫，這種情況目前不該出現（已用 `verify_geometry.py` 驗證過
 17 個 leg 全部至少有 2 個點），但程式仍要處理這個 case 以防未來新增路線時漏填。

@@ -12,6 +12,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..models import AnnotatedLeg, Confidence, Feature, GeometryPrecision, LatLngPoint
+from .routes_geometry import WalkingRouteGeometry
 
 # 車站設施中，會被複製到路段特徵上的欄位。
 _STATION_FEATURE_KEYS = (
@@ -59,10 +60,15 @@ def _worst_confidence(*features: Feature) -> Confidence:
 
 
 class Annotator:
-    def __init__(self, corridor: dict[str, Any]) -> None:
+    def __init__(
+        self,
+        corridor: dict[str, Any],
+        walking_geometry: WalkingRouteGeometry | None = None,
+    ) -> None:
         self._stations = {s["id"]: s for s in corridor.get("stations", [])}
         self._bus_routes = {r["id"]: r for r in corridor.get("bus_routes", [])}
         self._landmarks = corridor.get("landmarks", {})
+        self._walking_geometry = walking_geometry or WalkingRouteGeometry()
 
     # ---------- 幾何 ----------
 
@@ -80,28 +86,43 @@ class Annotator:
             return LatLngPoint(**landmark["position"])
         return None
 
-    def _resolve_path(self, leg: dict[str, Any]) -> tuple[list[LatLngPoint], GeometryPrecision]:
-        """leg 的 waypoints 轉成畫線用的座標陣列。
-
-        目前只有直線內插（起訖點之間沒有中繼點），所以一律標記 APPROXIMATE。
-        之後接上真實道路 / 軌道 shape 時，只需要在這裡換一種產生 path 的方式，
-        annotate_route 以上的呼叫端完全不用改。
-        """
+    def _waypoint_points(self, leg: dict[str, Any]) -> list[LatLngPoint]:
         waypoint_ids: list[str] = leg.get("waypoints", [])
-        if not waypoint_ids:
-            return [], GeometryPrecision.MISSING
-
         points = [self._point_for(wid) for wid in waypoint_ids]
         resolved = [p for p in points if p is not None]
 
         if len(resolved) != len(points):
             missing = [wid for wid, p in zip(waypoint_ids, points) if p is None]
-            # 資料錯誤不該讓整個請求 500，但要留下痕跡方便修正 —— 用 print 而非
-            # 靜默略過，這是一日專案，日誌基礎設施還沒建，print 會被 uvicorn 收進 stdout。
             print(f"[annotate] 警告：waypoint 找不到座標，已忽略：{missing}")
+        return resolved
+
+    def prefetch_walking_paths(self, candidates: list[dict[str, Any]]) -> None:
+        paths = [
+            self._waypoint_points(leg)
+            for candidate in candidates
+            for leg in candidate.get("legs", [])
+            if leg.get("mode") == "walk"
+        ]
+        self._walking_geometry.prefetch(paths)
+
+    def _resolve_path(self, leg: dict[str, Any]) -> tuple[list[LatLngPoint], GeometryPrecision]:
+        """leg 的 waypoints 轉成畫線用的座標陣列。
+
+        步行段優先使用 Routes API 路網幾何；沒有金鑰或請求失敗時保留端點線，
+        並標記 APPROXIMATE。其他運具目前仍使用種子資料的 waypoints。
+        """
+        if not leg.get("waypoints"):
+            return [], GeometryPrecision.MISSING
+
+        resolved = self._waypoint_points(leg)
 
         if not resolved:
             return [], GeometryPrecision.MISSING
+
+        if leg.get("mode") == "walk":
+            routed = self._walking_geometry.route(resolved)
+            if routed:
+                return routed, GeometryPrecision.ROAD_SNAPPED
 
         return resolved, GeometryPrecision.APPROXIMATE
 

@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -21,9 +22,11 @@ from ..models import (
 )
 from .annotate import Annotator
 from .rules import evaluate_hard_rules
-from .score import dominant_factors, label_for, score_route
+from .score import label_for, score_route
 
 _DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+# 掛在 Uvicorn 的 logger 下，讓 INFO 級評分紀錄會出現在開發伺服器終端。
+logger = logging.getLogger("uvicorn.error")
 
 
 @lru_cache(maxsize=1)
@@ -93,15 +96,70 @@ def _tag_routes(routes: list[EvaluatedRoute], profile_id: str) -> None:
             fewest.recommendation_tag = "最少轉乘"
 
 
-def _explain_feasible(route: EvaluatedRoute) -> str:
-    factors = dominant_factors(route.breakdown)
-    parts = [f"總負擔分數 {route.score:.1f}"]
-    if factors:
-        parts.append("主要來自 " + "、".join(factors))
+def _explain_feasible(route: EvaluatedRoute, best: EvaluatedRoute) -> str:
+    """用相對首選的實際取捨說明排序，不向使用者暴露內部評分。"""
+    parts: list[str] = []
+    if route.candidate_id == best.candidate_id:
+        parts.append("在可行路線中，這條整體最符合目前需求，建議優先選擇")
+    else:
+        advantages: list[str] = []
+        tradeoffs: list[str] = []
+
+        duration_delta = route.duration_min - best.duration_min
+        if duration_delta < -0.5:
+            advantages.append(f"少花 {abs(duration_delta):.0f} 分鐘")
+        elif duration_delta > 0.5:
+            tradeoffs.append(f"多花 {duration_delta:.0f} 分鐘")
+
+        walk_delta = route.total_walk_meters - best.total_walk_meters
+        if walk_delta < -1:
+            advantages.append(f"少走 {abs(walk_delta):.0f} 公尺")
+        elif walk_delta > 1:
+            tradeoffs.append(f"多走 {walk_delta:.0f} 公尺")
+
+        transfer_delta = route.transfers - best.transfers
+        if transfer_delta < 0:
+            advantages.append(f"少轉乘 {abs(transfer_delta)} 次")
+        elif transfer_delta > 0:
+            tradeoffs.append(f"多轉乘 {transfer_delta} 次")
+
+        if advantages and tradeoffs:
+            parts.append(
+                "相較首選可" + "、".join(advantages) + "，但會" + "、".join(tradeoffs)
+            )
+        elif advantages:
+            parts.append(
+                "相較首選可" + "、".join(advantages) + "，但其他無障礙條件較不符合目前需求"
+            )
+        elif tradeoffs:
+            parts.append("這條路線同樣可行，但相較首選會" + "、".join(tradeoffs))
+        else:
+            parts.append("這條路線同樣可行，但綜合其他無障礙條件後列為備選")
+
     if route.warnings:
         missing = sorted({label_for(w.feature) for w in route.warnings})
         parts.append("資料不足需現場確認：" + "、".join(missing))
     return "；".join(parts) + "。"
+
+
+def _log_score(profile_id: str, route: EvaluatedRoute) -> None:
+    """將技術性評分細節留在後端日誌，不帶到使用者介面。"""
+    breakdown = [
+        {
+            "feature": item.feature,
+            "raw_value": item.raw_value,
+            "weight": item.weight,
+            "contribution": item.contribution,
+        }
+        for item in route.breakdown
+    ]
+    logger.info(
+        "route_score profile=%s candidate=%s score=%.1f breakdown=%s",
+        profile_id,
+        route.candidate_id,
+        route.score,
+        json.dumps(breakdown, ensure_ascii=False, separators=(",", ":")),
+    )
 
 
 def _explain_excluded(route: EvaluatedRoute, best_duration: float | None) -> str:
@@ -120,6 +178,9 @@ def plan(request: PlanRequest) -> PlanResponse:
 
     candidates = _find_candidates(request.origin, request.destination)
     annotator = Annotator(load_corridor())
+    # Routes API is optional. When enabled, warm all distinct walking shapes in
+    # parallel; when disabled this is a no-op and planning stays fully offline.
+    annotator.prefetch_walking_paths(candidates)
 
     feasible: list[EvaluatedRoute] = []
     excluded: list[EvaluatedRoute] = []
@@ -147,6 +208,7 @@ def plan(request: PlanRequest) -> PlanResponse:
             continue
 
         evaluated.score, evaluated.breakdown = score_route(profile, route_features)
+        _log_score(request.profile_id, evaluated)
         feasible.append(evaluated)
 
     feasible.sort(key=lambda r: (r.score if r.score is not None else float("inf")))
@@ -154,7 +216,7 @@ def plan(request: PlanRequest) -> PlanResponse:
 
     best_duration = feasible[0].duration_min if feasible else None
     for route in feasible:
-        route.explanation = _explain_feasible(route)
+        route.explanation = _explain_feasible(route, feasible[0])
     for route in excluded:
         route.explanation = _explain_excluded(route, best_duration)
 
