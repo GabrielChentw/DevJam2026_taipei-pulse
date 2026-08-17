@@ -1,0 +1,87 @@
+%%{init: {"flowchart": {"curve": "basis", "nodeSpacing": 30, "rankSpacing": 52}, "themeVariables": {"fontFamily": "Arial, Noto Sans TC, sans-serif"}}}%%
+flowchart TB
+    subgraph RUNTIME["Taipei Pulse Runtime"]
+        direction LR
+    subgraph EXPERIENCE["使用者體驗 · Web 前端"]
+        direction TB
+        U(["使用者<br/>輪椅・低視力・高齡情境"])
+        CHAT["✅ 對話與路線選擇<br/>適合 / 不適合 / 理由"]
+        MAP["✅ Google Maps 3D<br/>路線預演 → 回到第一步視角"]
+        LAYER["✅ 無障礙與交通圖層<br/>設施・GLB 車輛方塊・車次標籤・目標車"]
+        VOICE["✅ Web Speech<br/>低視力語音輔助"]
+        U -->|"需求與偏好"| CHAT
+        CHAT --> MAP
+        MAP --> LAYER
+        CHAT --> VOICE
+    end
+
+    subgraph CORE["核心服務 · FastAPI · Cloud Run-ready"]
+        direction TB
+        REST["✅ REST API<br/>chat・plan・compare・transit・preferences"]
+        AGENT["✅ Gemini Orchestrator<br/>google-genai automatic function calling"]
+        ENGINE["✅ 確定性無障礙引擎<br/>annotate → rules → score → explain"]
+        TRANSIT["✅ Transit adapters<br/>ETA・A2・Shape・Metro timetable"]
+        PREF["✅ Preference adapter<br/>Firestore 或 process memory"]
+        SESSION[("✅ Chat session<br/>process memory")]
+        REST --> AGENT
+        AGENT --> ENGINE
+        REST --> TRANSIT
+        REST --> PREF
+        AGENT <--> SESSION
+        ENGINE -->|"路線 + 排除理由 + 第一步"| REST
+        TRANSIT -->|"車輛位置 + 車次 + 目標車"| REST
+    end
+    end
+
+    subgraph ECOSYSTEM["Google 技術、官方資料與離線 fallback"]
+        direction TB
+        subgraph GOOGLE["Google / Google Cloud"]
+            direction LR
+            MAPS["✅ Maps JavaScript API<br/>Photorealistic Maps 3D"]
+            ROUTES["✅ Routes API adapter<br/>一般候選路線"]
+            GEMINI["✅ Gemini 3.6 Flash<br/>對話與工具選擇"]
+            FIRESTORE[("◐ Cloud Firestore<br/>匿名偏好・可選")]
+            CLOUDRUN["◐ Cloud Run<br/>Dockerfile 就緒・待環境部署"]
+        end
+
+        subgraph OFFICIAL["臺灣官方交通與城市資料"]
+            direction LR
+            TDX["✅ TDX adapter<br/>公車 ETA / A2 / Shape<br/>捷運 StationTimeTable"]
+            TAIPEI["✅ 臺北市開放資料 adapter<br/>出口・電梯・坡道・廁所・有聲號誌"]
+        end
+
+        subgraph FALLBACK["Repository seeds · 外部資料失敗時"]
+            direction LR
+            PROFILE[("✅ profiles + candidates<br/>corridor JSON")]
+            SNAPSHOT[("✅ accessibility snapshot<br/>transit demo JSON")]
+        end
+
+        LEGEND["狀態<br/>✅ 已實作　◐ 可選 / 待部署　虛線 = fallback"]
+    end
+
+    CHAT <-->|"relative /api"| REST
+    MAP <-->|"地圖與相機"| MAPS
+    AGENT <-->|"生成與工具呼叫"| GEMINI
+    ENGINE -->|"候選路線"| ROUTES
+    TRANSIT <-->|"即時 / 時刻 / shape"| TDX
+    ENGINE <-->|"無障礙設施"| TAIPEI
+    PREF <-->|"已設定時"| FIRESTORE
+    CLOUDRUN -. "部署容器" .-> REST
+    PROFILE -. "固定 demo 候選與規則" .-> ENGINE
+    SNAPSHOT -. "官方來源失敗時" .-> TRANSIT
+    SNAPSHOT -. "官方來源失敗時" .-> ENGINE
+
+    classDef user fill:#fff4d8,stroke:#bf7a00,color:#4a3100,stroke-width:2px;
+    classDef web fill:#f1e9ff,stroke:#7653c6,color:#2f2350,stroke-width:1.5px;
+    classDef api fill:#e5f7f4,stroke:#008f7a,color:#123c36,stroke-width:1.5px;
+    classDef google fill:#e8f1fe,stroke:#4285f4,color:#18345f,stroke-width:1.5px;
+    classDef official fill:#e9f7ec,stroke:#2e8b57,color:#173d27,stroke-width:1.5px;
+    classDef fallback fill:#fff3df,stroke:#d98900,color:#563500,stroke-width:1.5px,stroke-dasharray: 6 4;
+    classDef legend fill:#f5f7fa,stroke:#7d8796,color:#27364a,stroke-width:1px;
+    class U user;
+    class CHAT,MAP,LAYER,VOICE web;
+    class REST,AGENT,ENGINE,TRANSIT,PREF,SESSION api;
+    class MAPS,ROUTES,GEMINI,FIRESTORE,CLOUDRUN google;
+    class TDX,TAIPEI official;
+    class PROFILE,SNAPSHOT fallback;
+    class LEGEND legend;

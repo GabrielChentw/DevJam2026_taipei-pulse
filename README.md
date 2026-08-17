@@ -5,6 +5,11 @@
 
 > DevJam 2026 · 一日開發專案
 
+![Taipei Pulse 最終 MVP 系統架構](docs/system-architecture.png)
+
+> 架構圖的可編輯 Mermaid 原始檔、資料流與部署邊界見
+> **[`docs/architecture.md`](docs/architecture.md)**。
+
 ## 為什麼是「差異化」
 
 這是整個專案的核心主張：輪椅使用者與視障者的需求**會互相衝突**。
@@ -35,9 +40,12 @@
 
 | 文件 | 內容 |
 | --- | --- |
-| [`docs/architecture.md`](docs/architecture.md) | 架構圖（一日版 + 完整願景）、profile 評分設計、風險表 |
-| [`docs/setup-gcp.md`](docs/setup-gcp.md) | GCP 逐步設定、錯誤碼對照表、金鑰安全 |
-| [`docs/README.md`](docs/README.md) | 圖表產出方式、Windows 開發環境踩雷紀錄 |
+| [`docs/architecture.md`](docs/architecture.md) | 最終 MVP 系統架構、執行流程、資料來源、部署與安全邊界 |
+| [`docs/system-architecture.png`](docs/system-architecture.png) | 可直接放入 README／簡報的最終架構圖 |
+| [`docs/api-contract.md`](docs/api-contract.md) | FastAPI 端點、TypeScript 契約與資料來源語意 |
+| [`docs/accessibility-data.md`](docs/accessibility-data.md) | 臺北無障礙設施資料的採用、取樣與信心度策略 |
+| [`docs/setup-gcp.md`](docs/setup-gcp.md) | Maps、Routes、Gemini、Firestore 與 Cloud Run 設定 |
+| [`docs/README.md`](docs/README.md) | 架構圖重建方式與 Windows 開發環境注意事項 |
 
 ## 技術選型
 
@@ -47,8 +55,10 @@
 | 前端 | React 19 + Vite 7 + TypeScript |
 | 後端 | FastAPI（部署目標 Cloud Run） |
 | Agent | Gemini + `google-genai` 自動 function calling |
-| 資料庫 | Firestore（一日版先用 repo 內的 JSON 種子資料）|
+| 資料層 | repo 內 JSON 種子／離線回退 + Firestore 匿名 opt-in 使用者偏好 |
 | 路線候選 | repo 內 JSON 離線候選 + Google Routes API 步行幾何 + TDX 公車 Shape（皆可 fallback） |
+| 即時／時刻表交通 | TDX A2、ETA、Shape、StationTimeTable；不可用時明確降級為 Demo 回放 |
+| 語音 | Browser Web Speech API（語音輸入與繁中朗讀） |
 
 引擎寫在 Python 而不是前端 TypeScript，是因為 **agent 必須呼叫它**。目前直接使用
 `google-genai` 把既有引擎包成工具；若引擎放在前端，就得維護兩份規劃邏輯。
@@ -190,12 +200,20 @@ api/
       tools.py              把評分引擎包成 Gemini 可呼叫工具
       chat.py               對話 session、function calling 與結果 capture
       camera.py             規劃結果 -> 地圖相機指令
+    data_sources/
+      accessibility.py     官方無障礙資料 + repo 快照回退
+      tdx_arrivals.py       TDX ETA/A2 與目標低地板車 Demo 資格
+      tdx_bus.py            TDX 公車 Shape 與裁切
+      tdx_traffic_scene.py  捷運／公車時刻表交通場景
+      user_preferences.py   Firestore opt-in 偏好 + 記憶體回退
 web/
   public/simple-3d.html     最小重現頁，用於區分設定問題與程式問題
   src/
     lib/googleMaps.ts       Maps API 載入器 + 錯誤攔截
     lib/api.ts              FastAPI 前端封裝
     lib/routeTour.ts        完整路線導覽時間軸、位置與鏡頭方向計算
+    lib/trafficLayer.ts     移動 GLB 車體、車次標籤與目標車圖層
+    lib/accessibilityFacilities.ts 路線附近無障礙設施圖層
     components/ChatPanel.tsx 對話、語音輸入與朗讀、mock 降級
     components/RoutePanel.tsx 可行與排除路線的比較介面
     components/Map3D.tsx    3D 地圖元件
@@ -261,7 +279,7 @@ Agent 的 `/api/chat` 說明（`CameraCommand` 怎麼轉成相機動作），以
 - [x] 輪行臺北與臺北捷運電梯／坡道 GPS、異常公告資料層（官方即時讀取 + CP950 解析 + 離線回退）
 - [x] TDX 公車官方 Shape（依 RouteUID／方向裁切上下車區間；失敗時 Google DRIVE／離線端點回退）
 - [x] 即將到站公車標記（TDX A2／ETA 每 15 秒更新；低地板與斜坡板明確標為 Demo 模擬）
-- [x] Mini Tokyo 3D 風格交通圖層（捷運／公車依 TDX 時刻表移動、彩色 GLB 長方體、可選車看資訊、目標車亮綠標記）
+- [x] Mini Tokyo 3D 風格交通圖層（捷運／公車依 TDX 時刻表移動、貼合 3D mesh 的彩色 GLB 車體、車次／ETA 精簡標籤、可選車看資訊、目標車亮綠標記）
 - [x] 語音輸入、回覆朗讀、亮暗色與視障高對比模式
 - [x] Firestore 使用者偏好持久化（匿名 opt-in；不儲存定位與對話；未設定時明確使用記憶體回退）
 

@@ -1,9 +1,20 @@
 # GCP 設定步驟
 
-讓 Photorealistic 3D 地圖出圖所需的全部設定。約 10 分鐘。
+讓最終 MVP 的 Photorealistic 3D 地圖、道路幾何、Gemini 對話、Firestore 偏好與
+Cloud Run 後端可運作的設定清單。只展示 3D 地圖約需 10 分鐘；其餘服務皆為可選增強。
 
-**只需要啟用 Maps JavaScript API 一個 API。** Map Tiles API 是給 deck.gl / CesiumJS
-那條渲染路線用的，本專案走 `Map3DElement`，不需要它。
+**最小可運作版本只需要 Maps JavaScript API。** Map Tiles API 是給 deck.gl / CesiumJS
+那條渲染路線用的，本專案走 `Map3DElement`，不需要它。Routes API、Firestore 與
+Cloud Run 依下方需求矩陣選擇啟用。
+
+| 能力 | 需要的服務／憑證 | 未設定時 |
+| --- | --- | --- |
+| 3D 地圖 | Maps JavaScript API + 瀏覽器金鑰 | 地圖無法載入 |
+| 沿道路步行／公車 fallback | Routes API + 後端金鑰 | 使用離線 waypoint 線 |
+| 對話式規劃 | Gemini API key（Google AI Studio） | `/api/chat` 回 503；其他端點正常 |
+| 公車 Shape／ETA／A2 | TDX Client ID / Secret | 使用 repo Demo 時刻表與示意路徑 |
+| 記住匿名偏好 | Firestore Native mode + ADC | 使用 process 記憶體，重啟即消失 |
+| 公開後端 | Cloud Run + Cloud Build | 本機 FastAPI 照常運作 |
 
 順手先做：背景下載 [gcloud CLI](https://cloud.google.com/sdk/docs/install)，
 之後部署 Cloud Run 會用到，讓它邊裝邊做下面的步驟。
@@ -119,8 +130,19 @@ Copy-Item .env.example .env.local
 
 ```
 VITE_GOOGLE_MAPS_API_KEY=AIzaSy...你的金鑰
-VITE_GOOGLE_MAPS_VERSION=alpha
+VITE_GOOGLE_MAPS_VERSION=weekly
 ```
+
+Google 官方目前建議一般應用使用 `weekly` channel；`alpha` 僅供實驗功能，最終版不需要。
+
+對話式 agent 另使用 Google AI Studio 產生的 Gemini API key，放在 `api/.env`：
+
+```dotenv
+GEMINI_API_KEY=你的_Gemini_API_Key
+TAIPEI_PULSE_MODEL=gemini-3.6-flash
+```
+
+`GEMINI_API_KEY` 只存在後端。不要加 `VITE_` 前綴，也不要放進前端 bundle。
 
 若要讓步行線貼合實際道路與步道路網，另在同一個 GCP 專案啟用 **Routes API**，
 建立受伺服器端限制的 API 金鑰，並填入 `api/.env`：
@@ -168,6 +190,26 @@ cmd /c "npm run dev"
 
 ---
 
+## Step 6 · Cloud Run 後端（選用）
+
+`api/Dockerfile` 已符合 Cloud Run 的 `$PORT` 契約，可直接從 `api/` 原始碼部署：
+
+```powershell
+gcloud config set project YOUR_PROJECT_ID
+gcloud services enable run.googleapis.com cloudbuild.googleapis.com firestore.googleapis.com
+gcloud run deploy taipei-pulse-api --source api --region asia-east1
+```
+
+敏感值應透過 Cloud Run 的環境變數／Secret Manager 設定，不應烘進 image。Cloud Run
+service account 若要寫 Firestore，需有 `roles/datastore.user`。目前 API 沒有身分驗證與
+速率限制，因此只建議受控 demo；公開服務前必須加上 Firebase Auth／Identity Platform、
+明確 CORS allowlist 與 rate limiting。
+
+前端目前是 Vite SPA，repo **沒有綁定特定 Hosting 產品**。部署到任意靜態主機時，必須
+把同源 `/api/*` 反向代理到 Cloud Run；本機開發則由 `web/vite.config.ts` 代理到 8000。
+
+---
+
 ## 出錯時的對照表
 
 | 症狀 | 真正的原因 |
@@ -175,7 +217,7 @@ cmd /c "npm run dev"
 | 訊息含**「僅供開發使用」**/ For development purposes only | **專案沒連結計費帳戶。**這是最明確的訊號，看到它就直接去修 Step 2，不用查別的 |
 | 畫面顯示「Google Maps 拒絕了這個 API 金鑰」 | 計費未連結、API 未啟用、或 referer 限制未包含 `localhost:5173` |
 | 「VITE_GOOGLE_MAPS_API_KEY 未設定」 | `.env.local` 未建立、變數名打錯、或未重啟 dev server |
-| 「載入 maps3d 函式庫失敗」 | `VITE_GOOGLE_MAPS_VERSION` 不是 `alpha`。3D Maps 仍為 Preview，需要 alpha 通道 |
+| 「載入 maps3d 函式庫失敗」 | 確認 Maps JavaScript API 已啟用、金鑰限制正確，並使用 `weekly`；`alpha` 不是必要條件 |
 | 地圖框出現但全黑 / 只有灰底 | 幾乎都是計費未連結。2D 地圖無計費會出圖但打浮水印，**3D Tiles 是直接不載入** |
 | 設定都對但仍然失敗 | 剛改過金鑰限制，等 5 分鐘 |
 

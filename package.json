@@ -4,6 +4,8 @@
   "version": "0.0.0",
   "description": "Diagram tooling for Taipei Pulse architecture docs",
   "scripts": {
+    "architecture:png": "mmdc -i docs/system-architecture.mmd -o docs/system-architecture.png -t neutral -b white --width 3000 --height 1800",
+    "architecture:svg": "mmdc -i docs/system-architecture.mmd -o docs/system-architecture.svg -t neutral -b white",
     "prediagrams": "node -e \"require('fs').mkdirSync('docs/build',{recursive:true})\"",
     "diagrams": "mmdc -i docs/architecture.md -o docs/build/architecture.md -e png -t neutral -b white --width 2000",
     "prediagrams:svg": "node -e \"require('fs').mkdirSync('docs/build',{recursive:true})\"",

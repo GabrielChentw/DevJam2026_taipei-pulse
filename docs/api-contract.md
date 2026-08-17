@@ -19,7 +19,18 @@ python -m venv .venv
 自動生成的 API 文件在 <http://127.0.0.1:8000/docs>，可以在那裡直接互動測試，
 不需要寫任何程式碼。
 
-## 三個端點
+## 端點總覽
+
+| 類別 | 端點 | 用途 |
+| --- | --- | --- |
+| 狀態 | `GET /api/health` | Cloud Run／本機健康檢查 |
+| 規劃 | `GET /api/profiles`、`POST /api/plan`、`GET /api/compare` | Profile 驅動的可行性、排序與比較 |
+| Agent | `POST /api/chat` | Gemini function calling、對話歷史、規劃結果與相機指令 |
+| 走廊資料 | `GET /api/corridor`、`GET /api/accessibility` | 種子資料與官方無障礙快照／回退狀態 |
+| 交通 | `GET /api/transit/arrivals`、`GET /api/transit/scene` | 即將到站與時刻表驅動的 3D 車輛物件 |
+| 偏好 | `GET/PUT /api/users/{id}/preferences` | 匿名 opt-in 偏好；Firestore 或明確記憶體回退 |
+
+## 路線規劃端點
 
 ### `GET /api/profiles`
 
@@ -85,7 +96,7 @@ for (const leg of route.legs) {
   if (leg.path.length === 0) continue;   // 'missing'，這段跳過不畫
 
   const polyline = new Polyline3DElement({
-    coordinates: leg.path,
+    path: leg.path.map(({ lat, lng }) => ({ lat, lng, altitude: 3 })),
     strokeColor: colorForMode(leg.mode),   // walk / metro / bus 用不同顏色
     strokeWidth: 6,
   });
@@ -265,7 +276,7 @@ for (const cmd of response.camera_commands) {
 - 每輪對話都會累積完整歷史一起送給 Gemini，目前沒有做歷史裁剪，長對話
   （幾十輪以上）可能變慢或超過 context 上限，一日 demo 用不到這個量級。
 
-## 已知限制（demo 前请注意）
+## 已知限制（demo 前請注意）
 
 - 只有台北車站 ↔ 台北市政府這一組起終點有資料。打其他起終點 `feasible` 和
   `excluded` 都會是空陣列，`summary` 會說明沒有候選路線。
