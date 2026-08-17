@@ -157,7 +157,7 @@ export default function RoutePanel({ routes, onSelectRoute }: Props) {
         <>
           <Divider label="不建議使用" />
           {excluded.map(route => (
-            <ExcludedCard key={route.id} route={route} />
+            <ExcludedCard key={route.id} route={route} onSelect={() => onSelectRoute(route)} />
           ))}
         </>
       )}
@@ -458,7 +458,10 @@ function RouteCard({ route, onSelect, embedded = false }: { route: PlannedRoute;
 }
 
 // ── 不建議路線卡 ──────────────────────────────────────────────────────────────
-function ExcludedCard({ route }: { route: PlannedRoute }) {
+// 雖然這條路線被 profile 的硬性條件排除，仍保留「在地圖上查看」的入口 ——
+// 使用者（或 demo 現場）可能想看看被排除的路線實際長什麼樣，或想確認排除
+// 原因是否真的是資料缺漏而非確定不可行（見 excludeReason 的說明文字）。
+function ExcludedCard({ route, onSelect }: { route: PlannedRoute; onSelect: () => void }) {
   return (
     <div style={{
       background: 'var(--bg-card)', border: '1.5px solid rgba(160,59,59,0.2)',
@@ -475,6 +478,23 @@ function ExcludedCard({ route }: { route: PlannedRoute }) {
         </svg>
         <span style={{ fontSize: 13, fontWeight: 600, color: '#A03B3B' }}>{route.label}</span>
         <span style={{ marginLeft: 'auto', fontSize: 12, color: '#A03B3B' }}>{route.totalMinutes} 分鐘</span>
+        <button
+          type="button"
+          onClick={onSelect}
+          aria-label={`仍在 3D 地圖上查看${route.label}`}
+          style={{
+            height: 26, padding: '0 9px', borderRadius: 7,
+            background: 'transparent', border: '1px solid rgba(160,59,59,0.35)',
+            color: '#A03B3B', cursor: 'pointer', fontFamily: 'inherit',
+            display: 'inline-flex', alignItems: 'center', gap: 4,
+            fontSize: 11, fontWeight: 600, flexShrink: 0,
+          }}
+        >
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>
+          </svg>
+          仍要查看
+        </button>
       </div>
 
       {/* 簡化步驟 */}

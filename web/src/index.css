@@ -614,3 +614,36 @@ body {
   border-color: #e6edf3;
   color: #e6edf3;
 }
+
+.camera-bar button.sim-btn {
+  border-color: #8B5E3C;
+  color: #d9a87a;
+  font-weight: 600;
+}
+
+.camera-bar button.sim-btn:hover:not(:disabled) {
+  border-color: #d9a87a;
+  color: #d9a87a;
+  background: rgba(139, 94, 60, 0.12);
+}
+
+.camera-bar button.sim-btn.is-active {
+  border-color: #f85149;
+  color: #f85149;
+}
+
+.sim-status-badge {
+  position: absolute;
+  top: 0.75rem;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.4rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid rgba(139, 94, 60, 0.5);
+  background: rgba(15, 22, 16, 0.88);
+  backdrop-filter: blur(4px);
+  font-size: 0.82rem;
+  color: #e6edf3;
+  pointer-events: none;
+  z-index: 5;
+}

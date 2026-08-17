@@ -6,7 +6,8 @@ import RoutePanel from './components/RoutePanel'
 import SosButton from './components/SosButton'
 import { BANNAN_CORRIDOR, CAMERA_PRESETS } from './data/corridor'
 import type { Map3DElementLike, Maps3dLibrary } from './lib/googleMaps'
-import type { AccessibilityMode, AppPhase, Message, PlannedRoute } from './types'
+import { createRouteSimulation, type RouteSimulationHandle } from './lib/routeSimulation'
+import type { AccessibilityMode, AppPhase, Message, PlannedRoute, RouteStep } from './types'
 import type { AgentResponse } from './mockData'
 
 
@@ -21,6 +22,13 @@ export default function App() {
   const [transitioning, setTransitioning] = useState(false)
 
   const mapRef = useRef<Map3DElementLike | null>(null)
+  const maps3dLibRef = useRef<Maps3dLibrary | null>(null)
+
+  // ── 路線模擬（開始模擬：鏡頭站到起點，沿路線跟拍，公車段有移動標記）──────
+  const [selectedRoute, setSelectedRoute] = useState<PlannedRoute | null>(null)
+  const [simActive, setSimActive]         = useState(false)
+  const [simLegLabel, setSimLegLabel]     = useState<string | null>(null)
+  const simulationRef = useRef<RouteSimulationHandle | null>(null)
 
   // Theme
   useEffect(() => {
@@ -34,6 +42,7 @@ export default function App() {
   // Map ready: 添加捷運站標記
   const handleMapReady = useCallback((map: Map3DElementLike, lib: Maps3dLibrary) => {
     mapRef.current = map
+    maps3dLibRef.current = lib
     const { Marker3DElement, AltitudeMode } = lib
     for (const station of BANNAN_CORRIDOR) {
       const marker = new Marker3DElement({
@@ -86,8 +95,9 @@ export default function App() {
     }
   }, [mapRef])
 
-  // 選擇路線 → 切換到地圖
-  const handleSelectRoute = (_route: PlannedRoute) => {
+  // 選擇路線 → 切換到地圖，並記住這條路線供「開始模擬」使用
+  const handleSelectRoute = (route: PlannedRoute) => {
+    setSelectedRoute(route)
     setTransitioning(true)
     setTimeout(() => {
       setPhase('map')
@@ -105,11 +115,44 @@ export default function App() {
     }, 260)
   }
 
-  // 返回對話
+  // 返回對話：順手停掉正在跑的模擬，避免切回對話後鏡頭還在背景亂飛
   const handleBackToChat = () => {
+    simulationRef.current?.destroy()
+    simulationRef.current = null
+    setSimActive(false)
+    setSimLegLabel(null)
     setTransitioning(true)
     setTimeout(() => { setPhase('chat'); setTransitioning(false) }, 220)
   }
+
+  // 畫出選定路線的靜態路徑（進地圖畫面、或換了選定路線時都要重畫）
+  useEffect(() => {
+    if (phase !== 'map' || !selectedRoute || !mapRef.current || !maps3dLibRef.current) return
+
+    simulationRef.current?.destroy()
+    simulationRef.current = createRouteSimulation(mapRef.current, maps3dLibRef.current, selectedRoute)
+
+    return () => {
+      simulationRef.current?.destroy()
+      simulationRef.current = null
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, selectedRoute, mapStatus.kind])
+
+  const startSimulation = useCallback(() => {
+    if (!simulationRef.current) return
+    setSimActive(true)
+    simulationRef.current.play({
+      onLegStart: (step: RouteStep) => setSimLegLabel(`${step.description}（${step.duration} 分）`),
+      onFinish: () => { setSimActive(false); setSimLegLabel(null) },
+    })
+  }, [])
+
+  const stopSimulation = useCallback(() => {
+    simulationRef.current?.stop()
+    setSimActive(false)
+    setSimLegLabel(null)
+  }, [])
 
   // 步驟切換 → 飛到對應站點
   // 同學的相機控制（完整保留）
@@ -220,6 +263,11 @@ export default function App() {
 
             <main className="app-body">
               <Map3D onReady={handleMapReady} onStatusChange={setMapStatus} />
+              {simLegLabel && (
+                <div className="sim-status-badge" role="status" aria-live="polite">
+                  🚌 {simLegLabel}
+                </div>
+              )}
             </main>
 
             <nav className="camera-bar" aria-label="相機定位">
@@ -228,16 +276,32 @@ export default function App() {
                   key={preset.id}
                   type="button"
                   onClick={() => flyTo(preset)}
-                  disabled={mapStatus.kind !== 'ready'}
+                  disabled={mapStatus.kind !== 'ready' || simActive}
                   aria-pressed={activePreset === preset.id}
                   className={activePreset === preset.id ? 'is-active' : undefined}
                 >
                   {preset.label}
                 </button>
               ))}
-              <button type="button" onClick={orbit} disabled={mapStatus.kind !== 'ready'}>
+              <button type="button" onClick={orbit} disabled={mapStatus.kind !== 'ready' || simActive}>
                 環繞一圈
               </button>
+              {selectedRoute && (
+                simActive ? (
+                  <button type="button" onClick={stopSimulation} className="sim-btn is-active">
+                    ■ 停止模擬
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={startSimulation}
+                    disabled={mapStatus.kind !== 'ready'}
+                    className="sim-btn"
+                  >
+                    ▶ 開始模擬（{selectedRoute.label}）
+                  </button>
+                )
+              )}
               <button
                 type="button"
                 onClick={handleBackToChat}

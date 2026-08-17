@@ -190,6 +190,9 @@ function evalToPlanned(r: EvaluatedRoute, excluded: boolean, origin: string, des
       accessible: r.violations.filter(v => v.leg_index === leg.index).length === 0,
       hasElevator: leg.features['elevator_available']?.value === true,
       line: leg.mode === 'metro' ? '板南線' : undefined,
+      // 直接沿用後端算好的座標，不要重新猜測 —— 這是畫線與模擬動畫的唯一依據。
+      path: leg.path,
+      geometryPrecision: leg.geometry_precision,
     })),
     fullyAccessible: r.feasible && r.violations.length === 0,
     excluded,

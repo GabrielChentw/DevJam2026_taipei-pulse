@@ -4,8 +4,8 @@
  */
 export interface Maps3dLibrary {
   Map3DElement: new (options: Record<string, unknown>) => Map3DElementLike;
-  Marker3DElement: new (options: Record<string, unknown>) => HTMLElement;
-  Marker3DInteractiveElement: new (options: Record<string, unknown>) => HTMLElement;
+  Marker3DElement: new (options: Record<string, unknown>) => Marker3DElementLike;
+  Marker3DInteractiveElement: new (options: Record<string, unknown>) => Marker3DElementLike;
   Polyline3DElement: new (options: Record<string, unknown>) => HTMLElement;
   Model3DElement: new (options: Record<string, unknown>) => HTMLElement;
   MapMode: Record<string, string>;
@@ -16,6 +16,16 @@ export interface LatLngAltitude {
   lat: number;
   lng: number;
   altitude?: number;
+}
+
+/**
+ * Marker3DElement 我們實際會用到的部分。position 是可寫屬性 ——
+ * 車輛模擬動畫每一格 (frame) 都靠直接重新指派這個屬性來移動標記，
+ * 不是透過動畫方法（那些是給相機用的，不是給標記用的）。
+ */
+export interface Marker3DElementLike extends HTMLElement {
+  position: LatLngAltitude;
+  label?: string;
 }
 
 /** Map3DElement 我們實際會用到的部分。 */
