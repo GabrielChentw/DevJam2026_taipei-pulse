@@ -16,18 +16,22 @@ export function setSpeechRate(rate: number) {
 
 export function speak(text: string, rate = getSpeechRate(), onFinish?: () => void) {
   if (!('speechSynthesis' in window)) return false
-  window.speechSynthesis.cancel()
+  const synthesis = window.speechSynthesis
+  if (synthesis.paused) synthesis.resume()
+  synthesis.cancel()
   const utterance = new SpeechSynthesisUtterance(text)
   utterance.lang = 'zh-TW'
   utterance.rate = rate
   utterance.onend = () => onFinish?.()
   utterance.onerror = () => onFinish?.()
-  window.speechSynthesis.speak(utterance)
+  synthesis.speak(utterance)
   return true
 }
 
 export function stopSpeaking() {
-  if ('speechSynthesis' in window) window.speechSynthesis.cancel()
+  if (!('speechSynthesis' in window)) return
+  window.speechSynthesis.cancel()
+  if (window.speechSynthesis.paused) window.speechSynthesis.resume()
 }
 
 export function pauseSpeaking() {

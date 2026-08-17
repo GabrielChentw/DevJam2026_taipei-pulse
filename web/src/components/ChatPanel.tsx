@@ -137,7 +137,7 @@ export default function ChatPanel({ mode, messages, onAddMessage, onAgentRespons
         agentRes.profileDetail = chatRes.plan.profile_label
       }
 
-      if (mode === 'visual' && speechAutoPlay && !agentRes.routesReady) {
+      if (speechAutoPlay && !agentRes.routesReady) {
         speak(getAgentSpeechSummary(userFacingReply))
       }
 
@@ -154,7 +154,7 @@ export default function ChatPanel({ mode, messages, onAddMessage, onAgentRespons
           timestamp: new Date(),
         }
         onAddMessage(agentMsg)
-        if (mode === 'visual' && speechAutoPlay && !res.routesReady) {
+        if (speechAutoPlay && !res.routesReady) {
           speak(getAgentSpeechSummary(res.content))
         }
         onAgentResponse(res)

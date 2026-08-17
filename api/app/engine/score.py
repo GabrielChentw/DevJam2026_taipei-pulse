@@ -68,6 +68,9 @@ FEATURE_LABELS: dict[str, str] = {
     "has_audio_announcement": "語音報站",
     "has_tactile_paving": "導盲磚",
     "low_floor_ratio": "低地板班次比例",
+    "curb_ramp_deficit": "路緣坡道證據不足",
+    "audible_signal_count": "沿線有聲號誌",
+    "audible_signal_deficit": "有聲號誌證據不足",
 }
 
 

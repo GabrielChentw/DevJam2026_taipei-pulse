@@ -432,6 +432,210 @@ body {
   background: rgba(52, 168, 83, 0.3);
 }
 
+.facility-layer-toggles {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px solid var(--map-border);
+  white-space: nowrap;
+}
+
+.facility-layer-toggles button {
+  display: inline-flex;
+  min-width: 0;
+  min-height: 27px;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  color: var(--map-muted);
+  background: transparent;
+  cursor: pointer;
+  font: 500 11px/1 system-ui, sans-serif;
+  white-space: nowrap;
+}
+
+.facility-layer-toggles button span {
+  display: inline-grid;
+  width: 16px;
+  height: 16px;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  background: #344454;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.facility-layer-toggles button b {
+  font: inherit;
+}
+
+.facility-layer-toggles button + button span {
+  background: #35483f;
+}
+
+.facility-layer-toggles button span.facility-toggle-exit {
+  border: 1px solid #8995a1;
+  color: #e8edf2;
+  background: #20262c;
+}
+
+.facility-layer-toggles button:nth-child(2) span {
+  background: #344454;
+}
+
+.facility-layer-toggles button span.facility-toggle-toilet {
+  border-radius: 5px;
+  color: #d9e0e5;
+  background: #434a50;
+  font-size: 7px;
+}
+
+.facility-layer-toggles button span.facility-toggle-audible {
+  border: 1px solid rgba(190, 173, 112, 0.78);
+  color: #f2ead0;
+  background: #4b4635;
+}
+
+.facility-map-badge {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  box-sizing: border-box;
+  place-items: center;
+  border: 1px solid rgba(195, 205, 214, 0.7);
+  border-radius: 50%;
+  color: #f1f4f6;
+  background: rgba(31, 38, 44, 0.9);
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.4);
+  font: 750 9px/1 system-ui, sans-serif;
+  white-space: nowrap;
+  cursor: pointer;
+  opacity: 0.52;
+  user-select: none;
+  transition: opacity 160ms ease, filter 160ms ease, transform 160ms ease;
+  animation: facility-badge-in 180ms ease-out;
+}
+
+@keyframes facility-badge-in {
+  from { opacity: 0; transform: scale(0.72); }
+}
+
+.facility-map-badge-metro_exit.is-accessible {
+  border-color: rgba(126, 174, 206, 0.95);
+}
+
+.facility-map-badge-metro_access {
+  width: 20px;
+  height: 20px;
+  border-color: rgba(113, 134, 154, 0.82);
+  background: rgba(37, 49, 61, 0.9);
+  font-size: 11px;
+}
+
+.facility-map-badge-curb_ramp {
+  width: 18px;
+  height: 18px;
+  border-color: rgba(112, 138, 122, 0.78);
+  background: rgba(38, 53, 47, 0.88);
+  font-size: 9px;
+}
+
+.facility-map-badge-public_toilet {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  border-color: rgba(174, 183, 191, 0.72);
+  color: #e2e7eb;
+  background: rgba(55, 62, 68, 0.9);
+  font-size: 7px;
+}
+
+.facility-map-badge-public_toilet.is-accessible {
+  border-radius: 50%;
+  border-color: rgba(102, 190, 180, 0.94);
+  color: #ecfffb;
+  background: rgba(31, 74, 70, 0.92);
+  font-size: 9px;
+}
+
+.facility-map-badge-audible_signal {
+  width: 18px;
+  height: 18px;
+  border-color: rgba(203, 185, 119, 0.76);
+  color: #f3ecd7;
+  background: rgba(65, 59, 42, 0.86);
+  font-size: 8px;
+  opacity: 0.46;
+}
+
+.facility-map-badge:hover {
+  opacity: 1;
+  filter: brightness(1.18);
+  transform: scale(1.08);
+}
+
+.app.is-route-touring .facility-map-badge {
+  opacity: 0.88;
+}
+
+.facility-layer-toggles button.is-active {
+  border-color: rgba(175, 190, 181, 0.28);
+  color: #f2f5f3;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.facility-layer-toggles button:not(.is-active) {
+  opacity: 0.42;
+}
+
+.facility-popover {
+  position: absolute;
+  z-index: 8;
+  top: 18px;
+  left: 18px;
+  display: flex;
+  width: min(320px, calc(100% - 24px));
+  max-height: min(260px, calc(100% - 24px));
+  box-sizing: border-box;
+  flex-direction: column;
+  gap: 5px;
+  padding: 16px 42px 16px 16px;
+  border: 1px solid var(--map-border);
+  border-radius: 14px;
+  color: var(--map-text);
+  background: var(--map-card-bg);
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(12px);
+  overflow-y: auto;
+}
+
+.facility-popover > span,
+.facility-popover small {
+  color: #91d8a0;
+  font-size: 11px;
+}
+
+.facility-popover strong { font-size: 15px; }
+.facility-popover p { margin: 0; color: var(--map-muted); font-size: 12px; line-height: 1.55; }
+.facility-popover-close {
+  position: absolute;
+  top: 8px;
+  right: 9px;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 9px;
+  color: var(--map-text);
+  background: rgba(255, 255, 255, 0.1);
+  cursor: pointer;
+  font-size: 21px;
+}
+
 .route-tour-steps button.route-tour-step-mrt:hover,
 .route-tour-steps button.route-tour-step-mrt.is-active {
   border-color: #1A73E8;

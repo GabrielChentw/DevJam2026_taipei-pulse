@@ -57,9 +57,10 @@ interface Props {
   onSelectRoute: (route: PlannedRoute) => void
   speechRate: number
   speechAutoPlay: boolean
+  claimAutoPlay: () => boolean
 }
 
-export default function RoutePanel({ routes, onSelectRoute, speechRate, speechAutoPlay }: Props) {
+export default function RoutePanel({ routes, onSelectRoute, speechRate, speechAutoPlay, claimAutoPlay }: Props) {
   const recommended = routes.filter(r => !r.excluded)
   const excluded    = routes.filter(r => r.excluded)
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null)
@@ -74,7 +75,7 @@ export default function RoutePanel({ routes, onSelectRoute, speechRate, speechAu
     setSpeechPaused(false)
 
     const recommendedRoute = routes.find(route => !route.excluded)
-    if (!speechAutoPlay || !recommendedRoute) return
+    if (!speechAutoPlay || !recommendedRoute || !claimAutoPlay()) return
 
     setSpeakingRouteId(recommendedRoute.id)
     const started = speak(
@@ -86,7 +87,7 @@ export default function RoutePanel({ routes, onSelectRoute, speechRate, speechAu
       },
     )
     if (!started) setSpeakingRouteId(null)
-  }, [routes, speechAutoPlay, speechRate])
+  }, [routes, speechAutoPlay, speechRate, claimAutoPlay])
 
   const toggleRouteSpeech = (route: PlannedRoute) => {
     if (speakingRouteId === route.id) {
