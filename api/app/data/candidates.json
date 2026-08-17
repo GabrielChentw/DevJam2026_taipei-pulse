@@ -15,14 +15,15 @@
           "legs": [
             {
               "mode": "walk",
-              "name": "步行至台北車站 M7 出口",
+              "name": "由台北車站 M4 無障礙出入口進站",
               "duration_min": 4,
               "walk_meters": 280,
               "step_count": 0,
               "street_crossings": 1,
               "uncontrolled_crossings": 0,
               "max_slope_percent": 2.0,
-              "waypoints": ["BL12", "taipei_station_m7"]
+              "road_snapping": false,
+              "waypoints": ["taipei_station_m4", "BL12"]
             },
             {
               "mode": "metro",
@@ -43,7 +44,7 @@
               "uncontrolled_crossings": 0,
               "max_slope_percent": 2.0,
               "uses_station_exit": { "station": "BL18", "exit": "3", "has_elevator": true },
-              "waypoints": ["city_hall_exit3", "city_hall_building"]
+              "waypoints": ["BL18", "city_hall_exit3", "city_hall_building"]
             }
           ]
         },
@@ -54,14 +55,15 @@
           "legs": [
             {
               "mode": "walk",
-              "name": "步行至台北車站 M7 出口",
+              "name": "由台北車站 M4 無障礙出入口進站",
               "duration_min": 4,
               "walk_meters": 280,
               "step_count": 0,
               "street_crossings": 1,
               "uncontrolled_crossings": 0,
               "max_slope_percent": 2.0,
-              "waypoints": ["BL12", "taipei_station_m7"]
+              "road_snapping": false,
+              "waypoints": ["taipei_station_m4", "BL12"]
             },
             {
               "mode": "metro",
@@ -82,7 +84,7 @@
               "uncontrolled_crossings": 0,
               "max_slope_percent": 1.0,
               "uses_station_exit": { "station": "BL18", "exit": "1", "has_elevator": false },
-              "waypoints": ["city_hall_exit1", "city_hall_building"]
+              "waypoints": ["BL18", "city_hall_exit1", "city_hall_building"]
             }
           ]
         },
@@ -131,14 +133,15 @@
           "legs": [
             {
               "mode": "walk",
-              "name": "步行至台北車站 M7 出口",
+              "name": "由台北車站 M4 無障礙出入口進站",
               "duration_min": 3,
               "walk_meters": 200,
               "step_count": 0,
               "street_crossings": 1,
               "uncontrolled_crossings": 0,
               "max_slope_percent": 2.0,
-              "waypoints": ["BL12", "taipei_station_m7"]
+              "road_snapping": false,
+              "waypoints": ["taipei_station_m4", "BL12"]
             },
             {
               "mode": "metro",
@@ -190,14 +193,15 @@
           "legs": [
             {
               "mode": "walk",
-              "name": "步行至台北車站 M7 出口",
+              "name": "由台北車站 M4 無障礙出入口進站",
               "duration_min": 4,
               "walk_meters": 280,
               "step_count": 0,
               "street_crossings": 1,
               "uncontrolled_crossings": 0,
               "max_slope_percent": 2.0,
-              "waypoints": ["BL12", "taipei_station_m7"]
+              "road_snapping": false,
+              "waypoints": ["taipei_station_m4", "BL12"]
             },
             {
               "mode": "metro",

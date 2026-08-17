@@ -14,9 +14,13 @@
   },
 
   "landmarks": {
-    "_note": "供 candidates.json 的 leg 畫出示意路線用。這些是人工估計的座標，不是實測站牌位置，前端與 agent 都應視為 approximate。真正的站牌座標應改用 TDX 的公車站點資料。",
+    "_note": "供 candidates.json 的 leg 畫出示意路線用。捷運出口優先採政府開放資料；公車站點仍為人工估計，之後應改用 TDX 資料。",
 
-    "taipei_station_m7": { "name": "台北車站 M7 出口", "position": { "lat": 25.0464, "lng": 121.5177 } },
+    "taipei_station_m4": {
+      "name": "台北車站 M4 無障礙出入口",
+      "position": { "lat": 25.046485, "lng": 121.517345 },
+      "source": "https://data.gov.tw/dataset/128428"
+    },
     "taipei_station_sinyi_stop": { "name": "信義幹線 台北車站站牌", "position": { "lat": 25.0458, "lng": 121.5183 } },
 
     "city_hall_exit3": { "name": "市政府站 3 號出口", "position": { "lat": 25.0407, "lng": 121.5683 } },
@@ -39,8 +43,17 @@
       "position": { "lat": 25.0478, "lng": 121.517, "altitude": 20 },
       "facilities": {
         "has_elevator": { "value": true, "confidence": "regulatory" },
-        "elevator_exits": { "value": ["M7", "M8"], "confidence": "estimated" },
-        "step_only_exits": { "value": ["M1", "M2", "M3", "M4", "M5", "M6"], "confidence": "estimated" },
+        "elevator_exits": {
+          "value": ["M2", "M4"],
+          "confidence": "verified",
+          "source": "https://web.metro.taipei/pages2026/WebStation/051/1",
+          "detail": "官方出口資訊標示 M2、M4 設有地面電梯；M4 可經站內電梯銜接板南線大廳與月台。"
+        },
+        "step_only_exits": {
+          "value": ["M6", "M7"],
+          "confidence": "verified",
+          "source": "https://web.metro.taipei/pages2026/WebStation/051/1"
+        },
         "has_tactile_paving": { "value": true, "confidence": "regulatory" },
         "has_audio_announcement": { "value": true, "confidence": "regulatory" },
         "has_platform_screen_door": { "value": null, "confidence": "unknown" },

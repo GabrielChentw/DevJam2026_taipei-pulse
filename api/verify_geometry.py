@@ -6,8 +6,22 @@ demo 時很容易被看出來。這個腳本把它當回歸測試跑。
 
 from __future__ import annotations
 
+from math import asin, cos, radians, sin, sqrt
+
 from app.engine.plan import load_candidates, plan
-from app.models import PlanRequest
+from app.models import LatLngPoint, PlanRequest
+
+MAX_JOIN_GAP_METERS = 50
+
+
+def distance_meters(a: LatLngPoint, b: LatLngPoint) -> float:
+    """相鄰 leg 的端點距離；過大代表前端導覽切段時會瞬移。"""
+    a_lat = radians(a.lat)
+    b_lat = radians(b.lat)
+    delta_lat = b_lat - a_lat
+    delta_lng = radians(b.lng - a.lng)
+    value = sin(delta_lat / 2) ** 2 + cos(a_lat) * cos(b_lat) * sin(delta_lng / 2) ** 2
+    return 12_742_000 * asin(sqrt(value))
 
 
 def main() -> int:
@@ -35,8 +49,24 @@ def main() -> int:
                     f"precision={leg.geometry_precision.value}"
                 )
 
+            for previous, current in zip(route.legs, route.legs[1:]):
+                if not previous.path or not current.path:
+                    continue
+                gap = distance_meters(previous.path[-1], current.path[0])
+                status = "JOIN" if gap <= MAX_JOIN_GAP_METERS else "GAP"
+                if gap > MAX_JOIN_GAP_METERS:
+                    ok = False
+                print(
+                    f"[{status:7}] {route.candidate_id:22} "
+                    f"leg{previous.index}->leg{current.index} gap={gap:.1f}m"
+                )
+
     print()
-    print("全部 leg 皆有座標。" if ok else "有 leg 缺座標，前端會畫出斷線，需修正 corridor.json 的 landmarks 或 waypoints。")
+    print(
+        "全部 leg 皆有座標，且相鄰路段連續。"
+        if ok
+        else f"有 leg 缺座標或交界超過 {MAX_JOIN_GAP_METERS}m，前端會畫出斷線或導覽瞬移。"
+    )
     return 0 if ok else 1
 
 

@@ -101,7 +101,7 @@ class Annotator:
             self._waypoint_points(leg)
             for candidate in candidates
             for leg in candidate.get("legs", [])
-            if leg.get("mode") == "walk"
+            if leg.get("mode") == "walk" and leg.get("road_snapping", True)
         ]
         self._walking_geometry.prefetch(paths)
 
@@ -119,7 +119,7 @@ class Annotator:
         if not resolved:
             return [], GeometryPrecision.MISSING
 
-        if leg.get("mode") == "walk":
+        if leg.get("mode") == "walk" and leg.get("road_snapping", True):
             routed = self._walking_geometry.route(resolved)
             if routed:
                 return routed, GeometryPrecision.ROAD_SNAPPED

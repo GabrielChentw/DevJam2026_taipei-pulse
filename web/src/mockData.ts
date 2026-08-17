@@ -203,7 +203,7 @@ function evalToPlanned(r: EvaluatedRoute, excluded: boolean, origin: string, des
       duration: leg.duration_min,
       accessible: r.violations.filter(v => v.leg_index === leg.index).length === 0,
       hasElevator: leg.features['elevator_available']?.value === true,
-      line: leg.mode === 'metro' ? '板南線' : undefined,
+      line: leg.mode === 'metro' ? '板南線' : leg.mode === 'bus' ? leg.name : undefined,
       path: leg.path,
       geometryPrecision: leg.geometry_precision,
     })),
@@ -360,6 +360,7 @@ export const QUICK_ACTIONS: Record<AccessibilityMode, string[]> = {
 
 // 初始快速動作（無模式時顯示）
 export const INITIAL_QUICK_ACTIONS = [
+  '台北車站到市政府',
   '我使用電動輪椅',
   '我有視力障礙',
   '高齡者',

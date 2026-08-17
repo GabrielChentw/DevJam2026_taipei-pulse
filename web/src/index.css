@@ -9,6 +9,15 @@
   --bg-input:         #F0F1EC;
   --green:            #3A6B4F;
   --green-light:      #EBF2ED;
+  --walk-color:       #3A6B4F;
+  --walk-bg:          #EBF2ED;
+  --mrt-color:        #1B5FAA;
+  --mrt-bg:           #E8F0FB;
+  --bus-color:        #8B5E3C;
+  --bus-bg:           #F5EFE8;
+  --danger:           #A03B3B;
+  --danger-bg:        rgba(160,59,59,0.06);
+  --danger-border:    rgba(160,59,59,0.22);
   --border:           #E2E4DC;
   --border-focus:     #3A6B4F;
   --text-primary:     #1A2417;
@@ -31,20 +40,30 @@
 }
 
 [data-theme='dark'] {
-  --bg-base:          #0F1610;
-  --bg-card:          #1A2417;
-  --bg-panel:         #141E11;
-  --bg-input:         #1E2B1A;
-  --border:           #2A3A26;
-  --border-focus:     #5A9B72;
-  --text-primary:     #E8EDE5;
-  --text-secondary:   #A8C0A0;
-  --text-muted:       #6B8065;
-  --bubble-user:      #2D5840;
-  --bubble-user-text: #E8EDE5;
-  --bubble-agent:     #1A2417;
-  --bubble-agent-text:#E8EDE5;
-  --bg-panel:         #141E11;
+  --bg-base:          #101612;
+  --bg-card:          #1B251E;
+  --bg-panel:         #161F19;
+  --bg-input:         #222E26;
+  --green:            #79C99A;
+  --green-light:      #263B2E;
+  --walk-color:       #83D6A4;
+  --walk-bg:          #253A2D;
+  --mrt-color:        #7CB8FF;
+  --mrt-bg:           #20364D;
+  --bus-color:        #E8B87C;
+  --bus-bg:           #3B3024;
+  --danger:           #FF8E8E;
+  --danger-bg:        rgba(255,110,110,0.10);
+  --danger-border:    rgba(255,130,130,0.34);
+  --border:           #405246;
+  --border-focus:     #79C99A;
+  --text-primary:     #F2F6F3;
+  --text-secondary:   #C2D0C6;
+  --text-muted:       #96A99C;
+  --bubble-user:      #356C50;
+  --bubble-user-text: #FFFFFF;
+  --bubble-agent:     #202C24;
+  --bubble-agent-text:#F2F6F3;
   --shadow-xs:        0 1px 3px rgba(0,0,0,0.25);
   --shadow-sm:        0 2px 8px rgba(0,0,0,0.30);
 }
@@ -137,6 +156,28 @@ body {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--green) 12%, transparent);
 }
 
+.header-speech-toggle {
+  display: inline-flex;
+  height: 30px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  background: var(--bg-input);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.header-speech-toggle input {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: var(--green);
+}
+
 /* ── 通用動畫 ─────────────────────────────────────────────────────────────── */
 @keyframes fadeUp {
   from { opacity: 0; transform: translateY(6px); }
@@ -202,6 +243,42 @@ body {
   border-color: color-mix(in srgb, var(--green) 70%, var(--border));
   background: var(--green);
   color: #fff;
+}
+
+.chat-markdown-heading {
+  margin: 8px 0 3px;
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 750;
+  line-height: 1.5;
+}
+
+.chat-markdown-heading:first-child { margin-top: 0; }
+
+.chat-markdown-line { min-height: 1.4em; }
+
+.chat-markdown-spacer {
+  display: block;
+  height: 7px;
+}
+
+.chat-markdown-divider {
+  height: 1px;
+  margin: 9px 0;
+  border: 0;
+  background: var(--border);
+}
+
+.chat-markdown-bullet {
+  display: grid;
+  grid-template-columns: 12px 1fr;
+  gap: 4px;
+  align-items: start;
+}
+
+.chat-markdown-bullet > span:first-child {
+  color: var(--green);
+  font-weight: 800;
 }
 
 [data-access='visual'] .chat-avatar {
@@ -619,10 +696,16 @@ body {
 }
 
 .route-summary-topline,
-.route-summary-meta,
-.route-mode-chain {
+.route-summary-meta {
   display: flex;
   align-items: center;
+}
+
+.route-mode-chain {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
 }
 
 .route-summary-topline {
@@ -688,8 +771,6 @@ body {
 }
 
 .route-mode-chain {
-  flex-wrap: wrap;
-  gap: 5px;
   color: var(--text-secondary);
   font-size: 11.5px;
   font-weight: 600;

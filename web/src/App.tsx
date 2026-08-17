@@ -94,6 +94,9 @@ export default function App() {
   const [mode, setMode]                 = useState<AccessibilityMode>('general')
   const [dark, setDark]                 = useState(false)
   const [speechRate, setSpeechRate]     = useState(getSpeechRate)
+  const [speechAutoPlay, setSpeechAutoPlay] = useState(
+    () => window.localStorage.getItem('taipei-pulse-speech-auto-play') !== 'false',
+  )
   const [messages, setMessages]         = useState<Message[]>([])
   const [routes, setRoutes]             = useState<PlannedRoute[]>([])
   const [selectedRoute, setSelectedRoute] = useState<PlannedRoute | null>(null)
@@ -122,6 +125,11 @@ export default function App() {
     stopSpeaking()
     setSpeechRate(rate)
     persistSpeechRate(rate)
+  }
+  const changeSpeechAutoPlay = (enabled: boolean) => {
+    if (!enabled) stopSpeaking()
+    setSpeechAutoPlay(enabled)
+    window.localStorage.setItem('taipei-pulse-speech-auto-play', String(enabled))
   }
   const cancelTourTimers = useCallback(() => {
     if (tourFrameRef.current !== null) {
@@ -447,6 +455,14 @@ export default function App() {
           </div>
 
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
+            <label className="header-speech-toggle">
+              <input
+                type="checkbox"
+                checked={speechAutoPlay}
+                onChange={event => changeSpeechAutoPlay(event.currentTarget.checked)}
+              />
+              <span>自動朗讀</span>
+            </label>
             <label className="header-speech-setting">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
@@ -493,6 +509,7 @@ export default function App() {
                 messages={messages}
                 onAddMessage={addMessage}
                 onAgentResponse={handleAgentResponse}
+                speechAutoPlay={speechAutoPlay}
               />
             </div>
             <div style={{ position: 'relative', minWidth: 0, minHeight: 0, overflow: 'hidden' }}>
@@ -500,6 +517,7 @@ export default function App() {
                 routes={routes}
                 onSelectRoute={handleSelectRoute}
                 speechRate={speechRate}
+                speechAutoPlay={mode === 'visual' && speechAutoPlay}
               />
             </div>
           </div>
