@@ -46,14 +46,14 @@
 | 3D 地圖 | Google Maps JavaScript API · Photorealistic 3D Maps (`Map3DElement`) |
 | 前端 | React 19 + Vite 7 + TypeScript |
 | 後端 | FastAPI（部署目標 Cloud Run） |
-| Agent | Agent Development Kit (ADK) + Gemini |
+| Agent | Gemini + `google-genai` 自動 function calling |
 | 資料庫 | Firestore（一日版先用 repo 內的 JSON 種子資料）|
-| 路線候選 | Google Routes API（含離線 fallback） |
+| 路線候選 | repo 內 JSON 離線候選（Google Routes API 為後續規劃） |
 
-引擎寫在 Python 而不是前端 TypeScript，是因為 **agent 必須呼叫它**。ADK 是 Python，
-若引擎在前端就等於要維護兩份實作。
+引擎寫在 Python 而不是前端 TypeScript，是因為 **agent 必須呼叫它**。目前直接使用
+`google-genai` 把既有引擎包成工具；若引擎放在前端，就得維護兩份規劃邏輯。
 
-示範範圍：捷運板南線 台北車站 ↔ 市政府 走廊及沿線公車。
+示範範圍：捷運板南線台北車站 → 台北市政府走廊及沿線公車。
 
 ## 快速開始
 
@@ -122,6 +122,10 @@ API 文件在 <http://127.0.0.1:8000/docs>。核心端點：
 
 3. **前端**：`web/src/lib/api.ts` 的 `sendChatMessage()`。
 
+前端會優先呼叫後端 `/api/chat`。若後端離線、金鑰未設定或 API 發生其他錯誤，
+目前會自動改用 mock 對話與假路線，確保畫面仍可展示。這個降級不會在 UI 顯示，
+因此驗證真實 agent 時請同時查看後端 log，確認出現 `[chat] ... tool_calls=...`。
+
 **判斷測試結果的標準**：`reply` 裡的數字（步行公尺、分鐘、坡度）要跟種子
 資料（`api/app/data/candidates.json`）對得上；`plan` 若非 null，`feasible`
 應至少有 1 條。若 `reply` 提到種子資料裡不存在的數字，代表工具呼叫失敗、
@@ -143,8 +147,9 @@ cmd /c "npm install"
 cmd /c "npm run dev"
 ```
 
-開 <http://localhost:5173>，應該看到市政府站上空的立體台北、板南線七個車站標記，
-底部相機按鈕可飛到台北車站、101、整條走廊。
+開 <http://localhost:5173>，會先看到對話與路線比較畫面。完成規劃後可選擇路線進入
+3D 地圖，查看板南線七個車站標記、路線疊圖與相機定位；按「開始模擬」會依序掃過
+各路段，公車路段另有移動標記與跟拍鏡頭。
 
 > **Windows 注意**：必須用 `cmd /c` 前綴，否則 PowerShell 的執行原則會擋住 npm。
 > 原因與永久解法見 [`docs/README.md`](docs/README.md#windows-上的注意事項)。
@@ -171,13 +176,21 @@ api/
       rules.py              硬條件解譯器，含資料缺漏政策
       score.py              加權排序，保留完整 breakdown
       plan.py               組裝與解釋文字生成
+    agent/
+      tools.py              把評分引擎包成 Gemini 可呼叫工具
+      chat.py               對話 session、function calling 與結果 capture
+      camera.py             規劃結果 -> 地圖相機指令
 web/
   public/simple-3d.html     最小重現頁，用於區分設定問題與程式問題
   src/
     lib/googleMaps.ts       Maps API 載入器 + 錯誤攔截
+    lib/api.ts              FastAPI 前端封裝
+    lib/routeSimulation.ts  3D 路線繪製、逐段相機移動與公車跟拍
+    components/ChatPanel.tsx 對話、語音輸入與朗讀、mock 降級
+    components/RoutePanel.tsx 可行與排除路線的比較介面
     components/Map3D.tsx    3D 地圖元件
     data/corridor.ts        板南線走廊座標與相機定位點
-    App.tsx
+    App.tsx                 對話、路線與地圖狀態整合
 ```
 
 引擎的三層責任分離是刻意的：
@@ -230,9 +243,21 @@ Agent 的 `/api/chat` 說明（`CameraCommand` 怎麼轉成相機動作），以
 - [x] 路段幾何資料（17 個 leg 皆可畫圖，`verify_geometry.py` 驗證）
 - [x] 前端 API 契約文件與型別定義
 - [x] Agent 對話邏輯（function calling 呼叫規劃引擎、產生相機指令，`verify_agent_tools.py` 驗證）
-- [ ] 前端接上路線引擎，3D 地圖疊路線
-- [ ] 前端接上 `/api/chat`，對話介面
-- [ ] 巴士 3D 移動動畫
+- [x] 前端接上 `/api/chat`，顯示 agent 回覆與完整規劃結果
+- [x] 路線比較介面（可行與被排除路線、推薦理由、逐段資訊）
+- [x] 3D 地圖疊加選定路線，依步行／捷運／公車分色
+- [x] 路線逐段模擬與公車移動標記／跟拍鏡頭
+- [x] 語音輸入、回覆朗讀、亮暗色與視障高對比模式
+
+### Demo 已知限制
+
+- 只有「台北車站 → 台北市政府」這一組起終點有候選路線；反向與其他地點尚未支援。
+- 17 個 leg 都有座標，但目前是端點錨定後的近似直線（`geometry_precision: approximate`），
+  不是實際道路、軌道或公車 shape。
+- 公車動畫時間為 demo 固定秒數，不代表真實車程；步行與捷運段目前只有鏡頭掃過，沒有車輛標記。
+- 對話 session 存在 FastAPI process 的記憶體中，服務重啟後不保留，也不適合多 instance 部署。
+- 前端遇到任何 `/api/chat` 錯誤都會靜默切到 mock；正式展示前應確認後端 log 的工具呼叫紀錄。
+- 後端尚無身分驗證與速率限制，只適合本機開發與受控 demo，不應直接公開上線。
 
 ### 引擎目前的實際輸出
 
