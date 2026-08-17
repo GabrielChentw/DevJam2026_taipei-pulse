@@ -349,10 +349,22 @@ body {
   transition: border-color 150ms ease, background 150ms ease;
 }
 
-.route-tour-steps button:hover,
-.route-tour-steps button.is-active {
-  border-color: rgba(82, 210, 115, 0.72);
-  background: rgba(52, 168, 83, 0.25);
+.route-tour-steps button.route-tour-step-walk:hover,
+.route-tour-steps button.route-tour-step-walk.is-active {
+  border-color: #34A853;
+  background: rgba(52, 168, 83, 0.3);
+}
+
+.route-tour-steps button.route-tour-step-mrt:hover,
+.route-tour-steps button.route-tour-step-mrt.is-active {
+  border-color: #1A73E8;
+  background: rgba(26, 115, 232, 0.3);
+}
+
+.route-tour-steps button.route-tour-step-bus:hover,
+.route-tour-steps button.route-tour-step-bus.is-active {
+  border-color: #F29900;
+  background: rgba(242, 153, 0, 0.3);
 }
 
 .route-tour-steps button span {
@@ -452,9 +464,12 @@ body {
 .route-tour-scrubber {
   min-width: 110px;
   flex: 1;
-  accent-color: #52d273;
   cursor: pointer;
 }
+
+.route-tour-mode-walk .route-tour-scrubber { accent-color: #34A853; }
+.route-tour-mode-mrt .route-tour-scrubber  { accent-color: #1A73E8; }
+.route-tour-mode-bus .route-tour-scrubber  { accent-color: #F29900; }
 
 /* ── 起點／終點卡 ────────────────────────────────────────────────────────── */
 .journey-card {

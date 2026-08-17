@@ -531,14 +531,14 @@ export default function App() {
                 </div>
               )}
               {selectedRoute && (
-                <div className={`route-tour-hud${tourStatus === 'idle' ? ' is-idle' : ''}`}>
+                <div className={`route-tour-hud route-tour-mode-${tourMode}${tourStatus === 'idle' ? ' is-idle' : ''}`}>
                   <div className="route-tour-steps" aria-label="切換路線區段">
                     {selectedRoute.steps.map((step, stepIndex) => (
                       step.path && step.path.length > 1 && (
                         <button
                           key={`${step.type}-${stepIndex}`}
                           type="button"
-                          className={tourStatus !== 'idle' && tourStepIndex === stepIndex ? 'is-active' : undefined}
+                          className={`route-tour-step-${step.type}${tourStatus !== 'idle' && tourStepIndex === stepIndex ? ' is-active' : ''}`}
                           onClick={() => jumpToRouteStep(stepIndex)}
                           aria-pressed={tourStatus !== 'idle' && tourStepIndex === stepIndex}
                         >
