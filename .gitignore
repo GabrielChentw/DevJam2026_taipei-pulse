@@ -29,6 +29,7 @@ f1.txt
 f2.txt
 f3.txt
 fsummary.txt
+chat-log*.txt
 COMMIT_MSG.tmp
 
 # env
