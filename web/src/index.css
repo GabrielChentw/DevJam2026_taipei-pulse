@@ -652,7 +652,7 @@ body {
 }
 
 .route-tour-hud.is-idle {
-  width: min(390px, calc(100% - 36px));
+  width: min(520px, calc(100% - 36px));
   gap: 9px;
   padding: 11px;
 }
@@ -662,14 +662,26 @@ body {
 }
 
 .route-tour-steps {
-  display: flex;
+  display: grid;
+  grid-auto-columns: minmax(78px, 1fr);
+  grid-auto-flow: column;
   gap: 6px;
+  padding-bottom: 2px;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-color: rgba(138, 168, 144, 0.42) transparent;
+  scrollbar-width: thin;
+}
+
+.route-tour-steps::-webkit-scrollbar { height: 4px; }
+.route-tour-steps::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(138, 168, 144, 0.42);
 }
 
 .route-tour-steps button {
   display: flex;
   min-width: 0;
-  flex: 1;
   align-items: center;
   justify-content: center;
   gap: 5px;
@@ -730,6 +742,7 @@ body {
 
 .facility-layer-toggles button b {
   font: inherit;
+  white-space: nowrap;
 }
 
 .facility-layer-toggles button + button span {
@@ -908,6 +921,7 @@ body {
 
 .route-tour-steps button span {
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .route-tour-steps button small {
