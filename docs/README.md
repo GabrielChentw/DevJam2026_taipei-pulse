@@ -13,6 +13,19 @@
 | `setup-gcp.md` | Google API、Firestore 與 Cloud Run 設定方式 |
 | `taipei-pulse-workflow.png` | 早期 workflow 圖，保留作為開發歷程參考 |
 
+## 執行位置與首次安裝
+
+下列圖表指令都要在 **repo 根目錄**執行，不是在 `docs/` 或 `web/`。首次使用，或根目錄的 `package-lock.json` 更新後，先安裝鎖定版本的工具：
+
+```powershell
+# 工作目錄：DevJam2026_taipei-pulse（repo 根目錄）
+cmd /c "npm ci"
+```
+
+根目錄的 `package.json` 提供 Mermaid 圖表工具；`web/package.json` 才提供前端的 `dev`、`build`、`preview`、`typecheck` 等指令。因此，安裝前端依賴不等於已安裝根目錄的圖表工具。
+
+若執行時出現 `Missing script`，先確認所在目錄與該目錄的 `package.json`；若找不到 `mmdc`，確認已在根目錄完成上述安裝。
+
 ## 重新產生總體架構圖
 
 ```powershell

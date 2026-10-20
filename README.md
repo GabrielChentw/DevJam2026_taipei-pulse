@@ -79,6 +79,8 @@
 
 ### 後端（路線評分引擎 + Agent）
 
+在 repo 根目錄開啟第一個終端機，再執行下列指令。啟動後端後，保持這個終端機運行；前端請使用另一個終端機。
+
 ```powershell
 cd api
 python -m venv .venv
@@ -159,6 +161,8 @@ API 文件在 <http://127.0.0.1:8000/docs>。核心端點：
 
 ### 前端
 
+另開一個位於 repo 根目錄的終端機，再執行下列指令。若目前位於 `api/`，先回到根目錄，避免在 `api/` 裡執行 `cd web`。
+
 ```powershell
 cd web
 Copy-Item .env.example .env.local
@@ -171,8 +175,8 @@ cmd /c "npm run dev"
 3D 地圖，查看板南線七個車站標記、分色路線與相機定位；按「開始導覽」會沿完整
 路線移動，並可切換路段、暫停、快轉、拖曳進度與調整播放速度。
 
-> **Windows 注意**：必須用 `cmd /c` 前綴，否則 PowerShell 的執行原則會擋住 npm。
-> 原因與永久解法見 [`docs/README.md`](docs/README.md#windows-上的注意事項)。
+> **Windows 注意**：若 PowerShell 執行原則阻擋 `npm.ps1`，可使用上述 `cmd /c` 形式，不需要修改系統執行原則。
+> 詳見 [`docs/README.md`](docs/README.md#windows-注意事項)。
 
 改 `.tsx` / `.css` 會熱更新。改 **`.env.local`**、`vite.config.ts`、`package.json`
 必須**重啟 dev server**（Vite 只在啟動時讀這些檔案）。
